@@ -5,11 +5,11 @@
 
 import { AdditiveBlending, BufferAttribute, BufferGeometry, DoubleSide, Mesh, MeshBasicNodeMaterial, PlaneGeometry, Points, PointsNodeMaterial } from 'three/webgpu';
 import {
-	Fn, float, fract, length, mix, mx_fractal_noise_float, oneMinus, positionGeometry,
+	Fn, exp, float, fract, length, min, mix, oneMinus, positionGeometry,
 	positionWorld, saturate, smoothstep, uniform, uv, vec3, vec4,
 } from 'three/tsl';
 
-import { causticPattern } from '../ocean/shading.js';
+import { causticPattern, seabedAlbedo, seabedHeight } from '../ocean/shading.js';
 import { mulberry32 } from '../core/util.js';
 
 /**
@@ -42,10 +42,9 @@ export class Seabed {
 
 			const p = positionGeometry.xy.add( u.seabedOrigin ).toVar( 'bedP' );
 
-			const dunes = mx_fractal_noise_float( vec3( p.mul( 0.012 ), 0.0 ), 3, 2.0, 0.5 ).mul( 1.6 );
-			const ripples = mx_fractal_noise_float( vec3( p.mul( 0.22 ), 0.0 ), 2, 2.0, 0.5 ).mul( 0.09 );
-
-			return vec3( positionGeometry.x, positionGeometry.y, dunes.add( ripples ).negate() );
+			// Same bathymetry the water surface refracts against — see the note in
+			// shading.js. Two renderings of one bottom.
+			return vec3( positionGeometry.x, positionGeometry.y, seabedHeight( p ).negate() );
 
 		} )();
 
@@ -53,15 +52,16 @@ export class Seabed {
 
 			const p = positionWorld.xz.toVar( 'bedWorld' );
 
-			const grain = mx_fractal_noise_float( vec3( p.mul( 0.75 ), 0.0 ), 3, 2.0, 0.55 ).mul( 0.5 ).add( 0.5 );
-			const patch = mx_fractal_noise_float( vec3( p.mul( 0.045 ).add( 11.0 ), 0.0 ), 2, 2.0, 0.5 ).mul( 0.5 ).add( 0.5 );
+			const sand = seabedAlbedo( p, u.seabedColor ).toVar( 'sand' );
 
-			const sand = u.seabedColor.mul( float( 0.62 ).add( grain.mul( 0.22 ) ).add( patch.mul( 0.28 ) ) ).toVar( 'sand' );
+			// Caustics, strongest with a high sun and fading with the depth of water
+			// above the bed — the focusing that makes them is destroyed by the same
+			// scattering that limits visibility.
+			const depth = u.seabedY.add( seabedHeight( p ) ).negate().toVar( 'bedDepth' );
 
-			// Caustics, strongest with a high sun and fading with depth of water
-			// above the bed.
 			const caustic = causticPattern( p, u.time )
 				.mul( u.causticStrength )
+				.mul( exp( depth.mul( - 0.11 ) ) )
 				.mul( saturate( u.sunDir.y.mul( 2.0 ) ) )
 				.toVar( 'bedCaustic' );
 
@@ -71,7 +71,7 @@ export class Seabed {
 			// chance to tint it.
 			const ambient = u.sunIntensity.mul( 0.42 ).add( 0.22 );
 
-			const lit = sand.mul( ambient ).mul( float( 1.0 ).add( caustic.mul( 0.55 ) ) );
+			const lit = sand.mul( ambient ).mul( float( 1.0 ).add( min( caustic, float( 1.3 ) ).mul( 0.45 ) ) );
 
 			// Fade the rim into the water colour so the plane's edge is never a
 			// visible line on the seabed. The underwater pass fogs distance anyway,

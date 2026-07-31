@@ -1,13 +1,9 @@
 {
 	"command": "eval",
-	"origin": "http://localhost:8173/?forcewebgl=1",
-	"startedAt": "2026-07-31T07:07:37.651Z",
+	"origin": "http://localhost:8173/?cloudscale=0.5&cloudsteps=14",
+	"startedAt": "2026-07-31T08:55:58.964Z",
 	"userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
-	"result": {
-		"bloom": false,
-		"backend": "WebGL 2",
-		"errs": []
-	},
-	"finishedAt": "2026-07-31T07:07:38.310Z",
+	"result": "19.23 ms @ 1920x1080",
+	"finishedAt": "2026-07-31T08:56:11.670Z",
 	"ok": true
 }

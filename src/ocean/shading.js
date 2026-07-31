@@ -2,7 +2,7 @@
 // normals, and procedural caustics. Kept in one place so the surface, the
 // seabed and the underwater pass all agree.
 
-import { Fn, abs, cos, dot, exp, float, max, min, mix, mx_fractal_noise_vec3, mx_worley_noise_float, normalize, oneMinus, pow, saturate, sin, smoothstep, vec2, vec3 } from 'three/tsl';
+import { Fn, abs, cos, dot, exp, float, max, min, mix, mx_fractal_noise_float, mx_fractal_noise_vec3, mx_worley_noise_float, normalize, oneMinus, pow, saturate, sin, smoothstep, vec2, vec3 } from 'three/tsl';
 
 /** Schlick's approximation. cosTheta is dot(N, V), clamped by the caller. */
 export const fresnelSchlick = /*@__PURE__*/ Fn( ( [ cosTheta, f0 ] ) => {
@@ -89,7 +89,7 @@ export const rippleSlope = /*@__PURE__*/ Fn( ( [ p, time, wind, strength, dist ]
  */
 export const causticPattern = /*@__PURE__*/ Fn( ( [ p, time ] ) => {
 
-	const q = p.mul( 0.30 ).toVar();
+	const q = p.mul( 0.42 ).toVar();
 	const t = time.mul( 0.42 ).toVar();
 
 	const w1 = mx_worley_noise_float( q.add( vec2( t.mul( 0.21 ), t.mul( - 0.13 ) ) ), 1.0, 1 ).toVar();
@@ -134,5 +134,61 @@ export const liftReflection = /*@__PURE__*/ Fn( ( [ r ] ) => {
 export const transmittance = /*@__PURE__*/ Fn( ( [ absorption, dist ] ) => {
 
 	return exp( absorption.mul( max( dist, float( 0.0 ) ) ).negate() );
+
+} );
+
+/**
+ * Bathymetry: metres of relief above the preset's nominal seabed depth.
+ *
+ * Shared, deliberately, by the seabed mesh and by the water surface's analytic
+ * refraction. They are two renderings of one bottom, and if they disagree the
+ * bottom visibly jumps as the camera crosses the waterline.
+ *
+ * Three scales. The sandbars are the important one: without them the bottom is
+ * a plane at a single depth, the water column has a single thickness, and the
+ * whole lagoon comes out one flat colour. Real shallow water is legible
+ * precisely because depth varies — that is what draws the pale bars and the
+ * dark channels between them.
+ */
+export const seabedHeight = /*@__PURE__*/ Fn( ( [ p ] ) => {
+
+	// Roughly 300 m, 45 m and 8 m features. The middle scale is the one that
+	// does the visible work: a viewer three metres up sees maybe forty metres of
+	// bottom, so relief with a 300 m period is a constant across the frame and
+	// relief with an 8 m period is texture. Only the 45 m band reads as terrain.
+	const basin = mx_fractal_noise_float( vec3( p.mul( 0.0034 ), 0.0 ), 2, 2.0, 0.5 ).mul( 3.4 );
+	const bars = mx_fractal_noise_float( vec3( p.mul( 0.022 ).add( 5.3 ), 0.0 ), 3, 2.0, 0.5 ).mul( 2.6 );
+	const dunes = mx_fractal_noise_float( vec3( p.mul( 0.12 ), 0.0 ), 2, 2.0, 0.5 ).mul( 0.22 );
+
+	return basin.add( bars ).add( dunes );
+
+} );
+
+/**
+ * Bottom albedo: pale sand broken up by darker weed and reef patches.
+ *
+ * @param {Node<vec2>} p     world XZ
+ * @param {Node<vec3>} sand  the preset's sand colour
+ */
+export const seabedAlbedo = /*@__PURE__*/ Fn( ( [ p, sand ] ) => {
+
+	const grain = mx_fractal_noise_float( vec3( p.mul( 0.75 ), 0.0 ), 3, 2.0, 0.55 ).mul( 0.5 ).add( 0.5 );
+
+	// Weed and reef. Uniform sand reads as a swimming-pool floor; the patches are
+	// what make it a seabed, and their contrast against the sand is most of the
+	// large-scale structure visible through the surface. It has to be strong —
+	// several metres of water is a low-pass filter, and whatever contrast the
+	// bottom does not have to begin with does not survive the column.
+	const weed = smoothstep( 0.46, 0.72,
+		mx_fractal_noise_float( vec3( p.mul( 0.030 ).add( 11.0 ), 0.0 ), 3, 2.0, 0.55 ).mul( 0.5 ).add( 0.5 )
+	).toVar();
+
+	// Wet sand reflects roughly a third of the light that reaches it, not most of
+	// it. Authoring the preset colour at full brightness and then multiplying by
+	// one meant a shallow bottom out-ran the water above it: the column had
+	// nothing left to tint and the lagoon came out near-white.
+	const base = sand.mul( float( 0.30 ).add( grain.mul( 0.22 ) ) );
+
+	return mix( base, base.mul( vec3( 0.14, 0.24, 0.20 ) ), weed.mul( 0.92 ) );
 
 } );

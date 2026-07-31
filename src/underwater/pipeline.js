@@ -23,8 +23,9 @@
 
 import { RenderPipeline, Vector2 } from 'three/webgpu';
 import {
-	Fn, abs, exp, float, max, min, mix, mx_fractal_noise_float, oneMinus, pass, pow, rtt,
-	saturate, screenUV, smoothstep, uniform, vec2, vec3, vec4,
+	Fn, If, abs, dot, exp, float, floor, fract, max, min, mix, mx_fractal_noise_float, oneMinus,
+	pass, pow, rtt, saturate, screenSize, screenUV, sin, smoothstep, step, uniform,
+	vec2, vec3, vec4,
 } from 'three/tsl';
 
 export class UnderwaterPipeline {
@@ -107,6 +108,59 @@ export class UnderwaterPipeline {
 			fogged.assign( mix( fogged, medium, saturate( edge ) ) );
 
 			const result = mix( scene.rgb, fogged, factor ).toVar( 'uwResult' );
+
+			/* --- rain --------------------------------------------------- */
+
+			// Two layers of falling streaks, screen-space, above water only.
+			//
+			// A storm without rain is a colour grade. The streaks are what makes it
+			// weather — and they are also the only element in the scene that moves
+			// against the camera rather than with it, which is most of why they read
+			// as being between the viewer and the sea.
+			//
+			// Aspect-corrected off screenSize so a wide window does not smear the
+			// drops sideways; slanted by adding x into the vertical phase, which is
+			// cheaper than rotating the lattice and indistinguishable at this size.
+			const rain = float( 0.0 ).toVar( 'rainAcc' );
+
+			// Uniform-driven, so the branch is coherent over the whole quad: eight
+			// of the ten presets are dry and pay nothing for this.
+			If( u.rainAmount.greaterThan( 0.001 ), () => {
+
+			const aspect = screenSize.x.div( max( screenSize.y, float( 1.0 ) ) ).toVar( 'rainAspect' );
+
+			for ( const [ density, speed, slant, weight ] of [ [ 44.0, 3.4, 0.26, 1.0 ], [ 76.0, 5.0, 0.30, 0.6 ] ] ) {
+
+				// Shear x by the (time-advancing) y so the lattice itself leans: a
+				// streak drawn vertically in this space comes out tilted on screen,
+				// and because y carries the clock the whole curtain also drifts
+				// sideways as it falls. Offsetting y by x instead — the obvious first
+				// try — only reshuffles which cell a drop lands in and leaves every
+				// streak bolt upright.
+				const py = screenUV.y.mul( density * 0.34 ).add( u.time.mul( speed ) ).toVar();
+				const p = vec2( screenUV.x.mul( aspect ).mul( density ).add( py.mul( slant ) ), py ).toVar();
+
+				const cell = floor( p ).toVar();
+				const f = fract( p ).toVar();
+
+				// One drop per cell, present only in a sparse subset.
+				const r = fract( sin( dot( cell, vec2( 41.13, 289.7 ) ) ).mul( 4193.77 ) ).toVar();
+
+				const present = step( 0.79, r );
+				const xoff = fract( r.mul( 17.3 ) ).sub( 0.5 ).mul( 0.7 );
+				const streak = smoothstep( 0.5, 0.0, abs( f.x.sub( 0.5 ).sub( xoff ) ).mul( 26.0 ) )
+					.mul( smoothstep( 1.0, 0.35, f.y ) );
+
+				rain.addAssign( present.mul( streak ).mul( weight ) );
+
+			}
+
+			} );
+
+			// Fades out under the surface, where falling water makes no sense.
+			result.addAssign(
+				vec3( 0.82, 0.86, 0.90 ).mul( saturate( rain ) ).mul( u.rainAmount ).mul( oneMinus( factor ) ).mul( 0.30 )
+			);
 
 			const dbg = this.uDebug;
 			result.assign( mix( result, scene.rgb, dbg.equal( 1.0 ) ) );

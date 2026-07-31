@@ -19,13 +19,13 @@
 
 import { DoubleSide, FrontSide, Mesh, MeshBasicNodeMaterial } from 'three/webgpu';
 import {
-	Fn, cameraPosition, dot, faceDirection, float, length, max, min, mix, mx_fractal_noise_float,
-	normalize, oneMinus, positionGeometry, positionWorld, pow, reflect, refract, saturate,
-	smoothstep, step, texture, varyingProperty, vec2, vec3,
+	Fn, If, cameraPosition, dot, exp, faceDirection, float, length, max, min, mix,
+	mx_fractal_noise_float, normalize, oneMinus, positionGeometry, positionWorld, pow, reflect,
+	refract, saturate, smoothstep, step, texture, varyingProperty, vec2, vec3,
 } from 'three/tsl';
 
 import { createWaveEvaluator, foamFromJacobian } from './waves.js';
-import { causticPattern, fresnelSchlick, ggxSpecular, liftReflection, rippleSlope, transmittance } from './shading.js';
+import { causticPattern, fresnelSchlick, ggxSpecular, liftReflection, rippleSlope, seabedAlbedo, seabedHeight, transmittance } from './shading.js';
 
 // Converts the GGX lobe (a density, in sr^-1) into the shader's radiance units.
 // Calibrated so a near-mirror facet clips to white and a wind-roughened surface
@@ -189,7 +189,7 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 
 		// Far water must go flat or the normal aliases into a shimmering band
 		// along the horizon.
-		const flatten = smoothstep( 2600.0, 26000.0, vRadial ).toVar( 'flatten' );
+		const flatten = smoothstep( 900.0, 9000.0, vRadial ).toVar( 'flatten' );
 		const N = normalize( mix( Nd, vec3( 0.0, 1.0, 0.0 ), flatten ) ).toVar( 'N' );
 
 		const nDotV = saturate( dot( N, V ) ).toVar( 'nDotV' );
@@ -241,14 +241,68 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 
 		/* --- transmission ---------------------------------------------- */
 
-		const refr = refract( V.negate(), N, float( 0.7502 ) ).toVar( 'refr' );
+		// Refract along a *smoothed* normal, not the full per-pixel one.
+		//
+		// Lateral displacement of the bottom scales with path length, so at eight
+		// metres a ripple slope of 0.3 moves the sample two and a half metres. The
+		// finest cascade and the procedural ripples both live below the size of the
+		// reef patches, so shading with them scatters the bottom pattern inside a
+		// single pixel and it averages back to flat colour — the lagoon comes out
+		// blurred and its structure disappears.
+		//
+		// Reflection keeps the sharp normal, which is where that detail belongs:
+		// the sky it samples is smooth, so fine slope shows up there as glitter
+		// rather than as noise.
+		const Nrefr = normalize( mix( N, Nw, float( 0.70 ) ) ).toVar( 'Nrefr' );
+		const refr = refract( V.negate(), Nrefr, float( 0.7502 ) ).toVar( 'refr' );
 
 		const maxPath = u.uwVisibility.mul( 1.6 ).toVar( 'maxPath' );
 
-		// Distance down the refracted ray to the seabed plane. Clamped so a
+		// Distance down the refracted ray to the seabed. Clamped so a
 		// near-horizontal ray cannot produce an enormous or negative path.
+		//
+		// Two steps: hit the nominal plane, then re-solve against the bathymetry
+		// sampled at that first guess. One refinement is enough because the bottom
+		// slopes gently compared with the ray, and it is what lets the sandbars
+		// read as shallower water rather than as a flat plane with a texture on it.
 		const descent = min( refr.y, float( - 0.02 ) );
-		const tBed = saturate( u.seabedY.sub( P.y ).div( descent ).div( maxPath ) ).mul( maxPath ).toVar( 'tBed' );
+		const solve = ( y ) => saturate( y.sub( P.y ).div( descent ).div( maxPath ) ).mul( maxPath );
+
+		// Everything below costs about fourteen octaves of noise per pixel, and in
+		// six of the ten presets there is no bottom at all. seabedMix is a uniform,
+		// so the branch is coherent across the entire draw — it is free when off,
+		// which is not true of anything keyed on per-pixel data.
+		const bedY = float( 0.0 ).toVar( 'bedY' );
+		const tBed = float( 0.0 ).toVar( 'tBed' );
+		const bedColor = vec3( 0.0 ).toVar( 'bedColor' );
+
+		If( u.seabedMix.greaterThan( 0.001 ), () => {
+
+			const tFlat = solve( u.seabedY );
+			bedY.assign( u.seabedY.add( seabedHeight( P.add( refr.mul( tFlat ) ).xz ) ) );
+			tBed.assign( solve( bedY ) );
+
+			// Vertical thickness of the water column over the bottom, which is what
+			// governs how much sunlight reaches it — not the slanted view path.
+			const waterDepth = max( P.y.sub( bedY ), float( 0.0 ) ).toVar( 'waterDepth' );
+
+			const bedPoint = P.add( refr.mul( tBed ) );
+
+			// Caustics wash out with depth: the focusing that makes them is destroyed
+			// by the same scattering that limits visibility. Without this term they
+			// were painted at full strength onto every depth, and a lagoon lit at noon
+			// blew the whole frame to cream.
+			const caustic = causticPattern( bedPoint.xz, u.time )
+				.mul( u.causticStrength )
+				.mul( exp( waterDepth.mul( - 0.11 ) ) )
+				.mul( saturate( u.sunDir.y.mul( 2.0 ) ) )
+				.toVar( 'caustic' );
+
+			bedColor.assign( seabedAlbedo( bedPoint.xz, u.seabedColor )
+				.mul( ambient )
+				.mul( float( 1.0 ).add( min( caustic, float( 1.3 ) ).mul( 0.45 ) ) ) );
+
+		} );
 
 		const pathLen = mix( maxPath, tBed, u.seabedMix ).toVar( 'pathLen' );
 
@@ -258,13 +312,15 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 		// The coupling is deliberately gentle: pushed hard, the long swell — which
 		// dominates the height field — smears whole troughs into one dark blob.
 		const crest = saturate( vHeight.mul( 0.40 ).add( 0.5 ) );
-		const depthNorm = saturate( pathLen.div( maxPath ).mul( mix( float( 1.06 ), float( 0.68 ), crest ) ) ).toVar( 'depthNorm' );
 
-		// Seabed: procedural sand with caustics projected onto it.
-		const bedPoint = P.add( refr.mul( tBed ) );
-		const caustic = causticPattern( bedPoint.xz, u.time ).mul( u.causticStrength ).toVar( 'caustic' );
-		const sandGrain = mx_fractal_noise_float( vec3( bedPoint.xz.mul( 0.22 ), 0.0 ), 3, 2.0, 0.5 ).mul( 0.13 );
-		const bedColor = u.seabedColor.mul( ambient ).mul( float( 0.62 ).add( sandGrain ).add( caustic.mul( 0.85 ) ) );
+		// What counts as "deep" differs by two orders of magnitude between open
+		// ocean and a lagoon. Over a bottom the interesting range is the first ~24
+		// metres; normalising against the visibility distance instead put a
+		// 7-metre lagoon at 0.15 of the gradient, so every part of it came out the
+		// same pale shallow colour and the water read as a flat wash.
+		const depthScale = mix( maxPath, float( 24.0 ), u.seabedMix ).toVar( 'depthScale' );
+		const depthNorm = saturate( pathLen.div( depthScale ).mul( mix( float( 1.06 ), float( 0.68 ), crest ) ) ).toVar( 'depthNorm' );
+
 
 		// Beer-Lambert: how much of the bottom survives the water column.
 		const T = transmittance( u.absorption, pathLen ).mul( u.seabedMix ).toVar( 'T' );
@@ -320,7 +376,7 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 		}
 
 		// Distant foam is the worst aliasing source in the whole scene.
-		const foamFade = oneMinus( smoothstep( 380.0, 3600.0, vRadial ) );
+		const foamFade = oneMinus( smoothstep( 300.0, 1900.0, vRadial ) );
 
 		const erode = foamFine.mul( 0.62 ).add( foamPatch.mul( 0.52 ) ).add( 0.14 ).toVar( 'foamErode' );
 		const foamMask = smoothstep( 0.22, 0.70, foamRaw.mul( erode ) ).mul( foamFade ).toVar( 'foamMask' );
