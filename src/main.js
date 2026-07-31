@@ -58,6 +58,7 @@ class App {
 		this.presetId = DEFAULT_PRESET;
 
 		this.paused = false;
+		this.orbiting = false;
 		this.autoQuality = true;
 		this.showStats = false;
 		this.forceWebGL = new URLSearchParams( location.search ).has( 'forcewebgl' );
@@ -615,6 +616,13 @@ class App {
 		// How deep the viewer is, for light attenuation in the post pass.
 		this.underwaterPipeline?.setCameraDepth( Math.max( 0, this.surfaceY - this.camera.position.y ) );
 
+		// Orbit follows her, so the frame stays composed while she sails.
+		if ( this.orbiting && this.vessel ) {
+
+			this.controls.setOrbitTarget( this.env.u.vesselPos.value );
+
+		}
+
 		this.buoys?.update( this.camera );
 		this.vessel?.update( this.camera, this.paused ? 0 : this._frameDt );
 		this.seabed?.update( this.camera );
@@ -738,8 +746,23 @@ class App {
 					break;
 
 				case 'KeyR':
+					this.orbiting = false;
+					this.controls.setOrbitTarget( null );
 					this.controls.reset();
 					this.ui.toastMessage( 'Camera reset' );
+					break;
+
+				case 'KeyO':
+					if ( ! this.vessel ) {
+
+						this.ui.toastMessage( 'No vessel to orbit on this backend' );
+						break;
+
+					}
+
+					this.orbiting = ! this.orbiting;
+					this.controls.setOrbitTarget( this.orbiting ? this.env.u.vesselPos.value : null );
+					this.ui.toastMessage( this.orbiting ? 'Orbit — drag to swing, wheel to dolly' : 'Fly' );
 					break;
 
 				case 'KeyF':

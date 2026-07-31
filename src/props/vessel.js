@@ -365,6 +365,80 @@ function buildGeometry() {
 
 	}
 
+	/* --- deck gear ---------------------------------------------------
+	 *
+	 * None of this changes the silhouette. It is all for the near view, which
+	 * is where a boat either has been used or has not: an empty deck reads as
+	 * a model of a boat however good the hull is.
+	 */
+	const GEAR = [ 0.34, 0.35, 0.36 ];
+	const BRASS = [ 0.42, 0.33, 0.14 ];
+
+	// Wheel, aft of the cabin. The rim is a ring of struts and the spokes run
+	// to a hub — a disc would read as a plate.
+	const wheelZ = - 5.4;
+	const wheelY = deckY + 1.02;
+	const R = 0.44;
+
+	const rimAt = ( i, n ) => {
+
+		const a = ( i / n ) * Math.PI * 2;
+		return [ Math.sin( a ) * R, wheelY + Math.cos( a ) * R, wheelZ ];
+
+	};
+
+	for ( let i = 0; i < 12; i ++ ) {
+
+		b.add( strut( rimAt( i, 12 ), rimAt( i + 1, 12 ), 0.028 ), BRASS, PART.wire );
+
+	}
+
+	for ( let i = 0; i < 6; i ++ ) {
+
+		b.add( strut( [ 0, wheelY, wheelZ ], rimAt( i, 6 ), 0.020 ), BRASS, PART.wire );
+
+	}
+
+	const pedestal = new CylinderGeometry( 0.10, 0.14, wheelY - sheer( 0.16 ), 8 );
+	pedestal.translate( 0, ( wheelY + sheer( 0.16 ) ) / 2, wheelZ );
+	b.add( pedestal, GEAR, PART.cabin );
+
+	// Sheet winches, on the side decks either side of the cabin.
+	for ( const sign of [ 1, - 1 ] ) {
+
+		for ( const z of [ - 2.6, 0.6 ] ) {
+
+			const w = new CylinderGeometry( 0.105, 0.135, 0.24, 10 );
+			w.translate( sign * 1.05, sheer( 0.5 ) + 0.22, z );
+			b.add( w, GEAR, PART.cabin );
+
+		}
+
+	}
+
+	// Foredeck hatch and the windlass forward of it.
+	const hatch = new BoxGeometry( 0.78, 0.11, 0.78 );
+	hatch.translate( 0, sheer( 0.72 ) + 0.16, 4.4 );
+	b.add( hatch, [ 0.24, 0.26, 0.27 ], PART.cabin );
+
+	const windlass = new BoxGeometry( 0.44, 0.24, 0.52 );
+	windlass.translate( 0, sheer( 0.86 ) + 0.22, 6.3 );
+	b.add( windlass, GEAR, PART.cabin );
+
+	const drum = new CylinderGeometry( 0.11, 0.11, 0.62, 10 );
+	drum.rotateZ( Math.PI / 2 );
+	drum.translate( 0, sheer( 0.86 ) + 0.36, 6.3 );
+	b.add( drum, BRASS, PART.cabin );
+
+	// Cockpit coaming: low walls the helmsman sits against.
+	for ( const sign of [ 1, - 1 ] ) {
+
+		const coam = new BoxGeometry( 0.10, 0.30, 3.4 );
+		coam.translate( sign * 0.92, sheer( 0.22 ) + 0.26, - 3.9 );
+		b.add( coam, [ 0.26, 0.24, 0.21 ], PART.cabin );
+
+	}
+
 	// --- mainsail: a cambered quad from the mast to the boom end. The belly is
 	//     the whole point; a flat sail reads as cardboard.
 	b.add( loft( 10, 10, ( t, v ) => {

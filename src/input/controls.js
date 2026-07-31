@@ -32,6 +32,11 @@ export class FlyControls {
 
 	constructor( camera, domElement ) {
 
+		// Null while flying; a live Vector3 the caller keeps updating while orbiting.
+		this.orbitTarget = null;
+		this.orbitDistance = 26;
+
+
 		this.camera = camera;
 		this.dom = domElement;
 
@@ -112,6 +117,16 @@ export class FlyControls {
 
 			if ( ! this.enabled ) return;
 			e.preventDefault();
+
+			// Orbiting, the wheel is a dolly; flying, it is a throttle. Same gesture,
+			// and in both modes it means "closer / further from what I am looking at".
+			if ( this.orbitTarget ) {
+
+				this.orbitDistance = clamp( this.orbitDistance * Math.exp( e.deltaY * 0.0015 ), 8, 140 );
+				return;
+
+			}
+
 			this.speed = clamp( this.speed * Math.exp( - e.deltaY * 0.0012 ), 0.6, 220 );
 
 		};
@@ -176,12 +191,65 @@ export class FlyControls {
 
 	}
 
+	/**
+	 * Orbit a point instead of flying.
+	 *
+	 * The same yaw and pitch drive both modes, so a drag means the same thing in
+	 * each and switching never re-orients the view under the user's hand. The
+	 * difference is only which end of the stick is held: flying rotates the eye
+	 * about itself, orbiting swings it around the target.
+	 *
+	 * @param {Vector3|null} target  null returns to fly mode
+	 */
+	setOrbitTarget( target ) {
+
+		if ( ! target ) {
+
+			this.orbitTarget = null;
+			return;
+
+		}
+
+		if ( ! this.orbitTarget ) {
+
+			// Enter at the distance the eye already is, so the switch is a change of
+			// control rather than a cut.
+			this.orbitDistance = clamp( this.position.distanceTo( target ), 8, 140 );
+
+		}
+
+		this.orbitTarget = target;
+
+	}
+
 	update( dt ) {
 
 		// Look damping. Note the yaw target is unwrapped, so this never takes the
 		// long way around.
 		this._yaw = damp( this._yaw, this.yaw, 26, dt );
 		this._pitch = damp( this._pitch, this.pitch, 26, dt );
+
+		if ( this.orbitTarget ) {
+
+			// Forward is toward the target, so the eye sits the other way along it.
+			const cp = Math.cos( this._pitch );
+			const d = this.orbitDistance;
+
+			this.position.set(
+				this.orbitTarget.x + Math.sin( this._yaw ) * cp * d,
+				this.orbitTarget.y - Math.sin( this._pitch ) * d,
+				this.orbitTarget.z + Math.cos( this._yaw ) * cp * d
+			);
+
+			// Still clamped: orbiting under a wave and orbiting into the sky are
+			// both worse than a short leash.
+			this.position.y = clamp( this.position.y, this.minY, this.maxY );
+
+			this._vel.set( 0, 0, 0 );
+			this.applyToCamera();
+			return;
+
+		}
 
 		const cp = Math.cos( this._pitch );
 		this._fwd.set(
