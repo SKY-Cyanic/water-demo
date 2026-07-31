@@ -21,6 +21,7 @@ import { FOAM_TIERS, FoamHistory } from './ocean/foam.js';
 import { SPECTRAL_TIERS, SpectralOcean } from './ocean/spectral.js';
 import { Ocean, createOceanMaterial } from './ocean/material.js';
 import { Buoys } from './props/buoys.js';
+import { Vessel } from './props/vessel.js';
 import { UnderwaterPipeline } from './underwater/pipeline.js';
 import { Particles, Seabed } from './underwater/scenery.js';
 import { FlyControls } from './input/controls.js';
@@ -312,9 +313,19 @@ class App {
 			this.buoys = new Buoys( this.env, this.spectral.textures, 9 );
 			this.scene.add( this.buoys.mesh );
 
+			// The hero object. Everything the water does at its boundary — the foam
+			// collar, the shadow cast into the column — is driven from uniforms the
+			// vessel writes, so it has to exist before the surface material is asked
+			// to shade a frame.
+			this.vessel = new Vessel( this.env, this.spectral.textures );
+			this.scene.add( this.vessel.mesh );
+			this.env.u.vesselMix.value = 1;
+
 		} else {
 
 			this.buoys = null;
+			this.vessel = null;
+			this.env.u.vesselMix.value = 0;
 
 		}
 
@@ -347,6 +358,14 @@ class App {
 
 			this.scene.remove( this.buoys.mesh );
 			this.buoys.dispose();
+
+		}
+
+		if ( this.vessel ) {
+
+			this.scene.remove( this.vessel.mesh );
+			this.vessel.dispose();
+			this.vessel = null;
 
 		}
 

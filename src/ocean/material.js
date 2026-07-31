@@ -334,6 +334,37 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 
 		const body = bedColor.mul( T ).add( volume.mul( oneMinus( T ) ) ).toVar( 'body' );
 
+		/* --- contact with the vessel ----------------------------------- */
+
+		// Normalised distance from the hull, in units of its own footprint: 0 at
+		// the centreline, 1 at the planking. Cheap because the heading is baked
+		// into the geometry, so the footprint is an axis-aligned ellipse.
+		const hullD = float( 4.0 ).toVar( 'hullD' );
+
+		If( u.vesselMix.greaterThan( 0.001 ), () => {
+
+			// Rotate into the hull's own frame before normalising, so the footprint
+			// is the ellipse the boat actually occupies rather than its bounding
+			// box. At a 57-degree heading the box is nearly twice the area, and the
+			// foam collar drawn from it read as a raft the boat was sitting on.
+			const rel = P.xz.sub( u.vesselPos.xz ).toVar( 'hullRel' );
+			const c = u.vesselDir.x, sn = u.vesselDir.y;
+			const local = vec2(
+				rel.x.mul( c ).add( rel.y.mul( sn ) ),
+				rel.x.mul( sn ).negate().add( rel.y.mul( c ) )
+			).div( u.vesselHalf );
+
+			hullD.assign( length( local ) );
+
+			// The hull blocks the sky and the sun from the water under and beside
+			// it. Without this the boat looks pasted on: it is the darkening in the
+			// water, more than the object itself, that says something is *in* the
+			// sea rather than in front of it.
+			const shade = oneMinus( smoothstep( 0.80, 1.45, hullD ) ).mul( 0.55 ).toVar( 'hullShade' );
+			body.mulAssign( oneMinus( shade ) );
+
+		} );
+
 		// Back-lit crest translucency: light entering the far side of a wave and
 		// scattering out toward the eye. Strongest with a low sun behind the wave.
 		const backLit = pow( saturate( dot( V, u.sunDir.negate() ) ), 3.5 );
@@ -364,6 +395,21 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 		).mul( 0.5 ).add( 0.5 ).toVar( 'foamPatch' );
 
 		const foamRaw = vFoam.mul( u.foamAmount ).toVar( 'foamRaw' );
+
+		// Waterline. A moored hull still works the water against its planking, and
+		// the resulting collar of aerated foam is the one cue that reliably reads as
+		// "floating in" rather than "resting on". Torn up by the same noise as
+		// wave foam so it is not a drawn outline.
+		If( u.vesselMix.greaterThan( 0.001 ), () => {
+
+			const collar = smoothstep( 0.90, 1.00, hullD ).mul( oneMinus( smoothstep( 1.00, 1.14, hullD ) ) );
+
+			// Torn by the same two noise scales as wave foam. A clean ring around
+			// the hull is unmistakably a drawn outline; aeration is patchy.
+			const torn = foamFine.mul( 0.55 ).add( foamPatch.mul( 0.45 ) ).add( 0.30 );
+			foamRaw.assign( max( foamRaw, collar.mul( torn ).mul( 1.5 ) ) );
+
+		} );
 
 		if ( opts.foam ) {
 

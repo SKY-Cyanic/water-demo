@@ -186,6 +186,12 @@ export function createEnv() {
 		/* weather */
 		rainAmount: uniform( 0 ),
 
+		/* hero vessel — where the water should show a waterline and a hull shadow */
+		vesselPos: uniform( new Vector3() ),
+		vesselHalf: uniform( new Vector2( 2.3, 7.6 ) ),   // half-beam, half-length
+		vesselDir: uniform( new Vector2( 1, 0 ) ),        // (cos, sin) of the heading
+		vesselMix: uniform( 0 ),                          // 0 when no vessel is present
+
 		/* underwater */
 		uwTint: uniform( new Color() ),
 		uwVisibility: uniform( 26 ),

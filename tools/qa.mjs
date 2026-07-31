@@ -293,6 +293,8 @@ async function capture( chrome, name, { settle = 6 } = {} ) {
 
 const VIEWS = {
 	hero: { y: 5.5, yaw: Math.PI * 1.18, pitch: - 0.055 },
+	// Framed on the moored vessel.
+	vessel: { y: 4.2, yaw: Math.PI * 1.18, pitch: - 0.045 },
 	low: { y: 2.2, yaw: Math.PI * 1.05, pitch: - 0.02 },
 	// Angled down enough that the bottom is actually in frame.
 	lagoon: { y: 3.4, yaw: Math.PI * 1.05, pitch: - 0.22 },
@@ -351,6 +353,7 @@ async function shots( chrome ) {
 		[ 'arctic', 'qa-arctic.png', 'low' ],
 		[ 'dusk', 'qa-dusk.png', 'sunward' ],
 		[ 'sea-fog', 'qa-sea-fog.png', 'hero' ],
+		[ 'open-sea', 'qa-vessel.png', 'vessel' ],
 	];
 
 	for ( const [ preset, file, view ] of presets ) {

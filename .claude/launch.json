@@ -1,0 +1,10 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "water-demo",
+      "url": "http://localhost:8173",
+      "port": 8173
+    }
+  ]
+}
