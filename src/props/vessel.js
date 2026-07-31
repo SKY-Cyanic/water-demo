@@ -38,6 +38,9 @@ const DRAFT = 2.05;
 /** How far the finished hull is dropped so she floats on her lines. */
 const SINK = 1.35;
 
+/** How far she may drift from the viewer before wrapping to the other side. */
+const LATTICE = 900;
+
 /** Half-beam at parametric station t, 0 = transom, 1 = stem. */
 function halfBeam( t ) {
 
@@ -364,6 +367,15 @@ export class Vessel {
 		env.u.vesselPos.value.set( anchor[ 0 ], 0, anchor[ 1 ] );
 		env.u.vesselHalf.value.set( BEAM / 2 - 0.05, ( LENGTH_AFT + LENGTH_FWD ) / 2 - 0.6 );
 		env.u.vesselDir.value.set( Math.cos( heading ), Math.sin( heading ) );
+		env.u.vesselSpeed.value = 1;
+
+		// Bow direction in world XZ. rotateY(h) maps the hull's +Z to this.
+		this._bow = [ Math.sin( heading ), Math.cos( heading ) ];
+		this._travel = 0;
+
+		// QA holds her still so the fixed inspection views stay repeatable. The
+		// wake uniform is untouched, so the shots still show it.
+		this.hove = false;
 
 	}
 
@@ -384,7 +396,10 @@ export class Vessel {
 
 		material.positionNode = Fn( () => {
 
-			const anchor = vec2( this.anchor[ 0 ], this.anchor[ 1 ] );
+			// Live, because she sails. A baked constant would have pinned the hull
+			// while the wake and the waterline foam — which read the uniform —
+			// walked away from her.
+			const anchor = u.vesselPos.xz.toVar( 'vesAnchor' );
 
 			const disp = vec3( 0, 0, 0 ).toVar( 'vesDisp' );
 			const slope = vec2( 0, 0 ).toVar( 'vesSlope' );
@@ -513,6 +528,32 @@ export class Vessel {
 		} )();
 
 		return material;
+
+	}
+
+	/**
+	 * Make way.
+	 *
+	 * A wake needs a cause. Rather than paint a trail behind a moored boat, she
+	 * makes about three knots along her heading — slow enough that the one-point
+	 * wave sampling still looks settled, fast enough that the Kelvin arms have
+	 * something to be the wake *of*.
+	 *
+	 * She wraps on a long lattice relative to the viewer, like the buoys, so she
+	 * can sail indefinitely without ever sailing out of the world. The wrap is
+	 * several hundred metres out, where haze has taken the contrast anyway.
+	 */
+	update( camera, dt ) {
+
+		if ( ! this.hove ) this._travel += dt * 1.55;
+
+		const bx = this.anchor[ 0 ] + this._bow[ 0 ] * this._travel;
+		const bz = this.anchor[ 1 ] + this._bow[ 1 ] * this._travel;
+
+		const x = bx + Math.round( ( camera.position.x - bx ) / LATTICE ) * LATTICE;
+		const z = bz + Math.round( ( camera.position.z - bz ) / LATTICE ) * LATTICE;
+
+		this.env.u.vesselPos.value.set( x, 0, z );
 
 	}
 

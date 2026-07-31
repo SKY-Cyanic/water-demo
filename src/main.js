@@ -616,6 +616,7 @@ class App {
 		this.underwaterPipeline?.setCameraDepth( Math.max( 0, this.surfaceY - this.camera.position.y ) );
 
 		this.buoys?.update( this.camera );
+		this.vessel?.update( this.camera, this.paused ? 0 : this._frameDt );
 		this.seabed?.update( this.camera );
 		this.particles?.update( this.camera, dt, this.underwaterFactor );
 

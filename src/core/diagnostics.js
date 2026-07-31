@@ -280,6 +280,13 @@ export function installQAHooks( app ) {
 		// autoQuality:false was silently ignored, and every performance number was
 		// measured at whatever resolution the auto-scaler had already dropped to —
 		// which is exactly the kind of measurement that looks like data and is not.
+		if ( patch.vesselHove !== undefined && app.vessel ) {
+
+			app.vessel.hove = !! patch.vesselHove;
+			if ( patch.vesselHove ) app.vessel._travel = 0;
+
+		}
+
 		for ( const key of [ 'autoQuality', 'resolutionScale', 'showStats' ] ) {
 
 			if ( patch[ key ] !== undefined ) app.setSetting( key, patch[ key ] );

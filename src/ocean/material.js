@@ -19,7 +19,7 @@
 
 import { DoubleSide, FrontSide, Mesh, MeshBasicNodeMaterial } from 'three/webgpu';
 import {
-	Fn, If, cameraPosition, dot, exp, faceDirection, float, length, max, min, mix,
+	Fn, If, abs, cameraPosition, dot, exp, faceDirection, float, length, max, min, mix,
 	mx_fractal_noise_float, normalize, oneMinus, positionGeometry, positionWorld, pow, reflect,
 	refract, saturate, screenUV, smoothstep, step, texture, varyingProperty, vec2, vec3,
 } from 'three/tsl';
@@ -355,6 +355,7 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 		// the centreline, 1 at the planking. Cheap because the heading is baked
 		// into the geometry, so the footprint is an axis-aligned ellipse.
 		const hullD = float( 4.0 ).toVar( 'hullD' );
+		const hullLocalOut = vec2( 0.0, 0.0 ).toVar( 'hullLocalOut' );
 
 		If( u.vesselMix.greaterThan( 0.001 ), () => {
 
@@ -367,13 +368,20 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 			// would otherwise throw it to the horizon.
 			const drop = u.sunDir.xz.div( max( u.sunDir.y, float( 0.30 ) ) ).mul( 1.4 );
 			const rel = P.xz.sub( u.vesselPos.xz ).add( drop ).toVar( 'hullRel' );
-			const c = u.vesselDir.x, sn = u.vesselDir.y;
-			const local = vec2(
-				rel.x.mul( c ).add( rel.y.mul( sn ) ),
-				rel.x.mul( sn ).negate().add( rel.y.mul( c ) )
-			).div( u.vesselHalf );
 
-			hullD.assign( length( local ) );
+			// Rotate world XZ into the hull's frame: x across the beam, y toward the
+			// bow. The transpose of this had the sign on the wrong term, which
+			// rotates by -2h instead of -h — it maps correctly only when the heading
+			// is zero, which is exactly the case anyone testing it would try first.
+			// The footprint ellipse has been skewed off the hull since it was written.
+			const c = u.vesselDir.x, sn = u.vesselDir.y;
+			const hullLocal = vec2(
+				rel.x.mul( c ).sub( rel.y.mul( sn ) ),
+				rel.x.mul( sn ).add( rel.y.mul( c ) )
+			).toVar( 'hullLocal' );
+
+			hullD.assign( length( hullLocal.div( u.vesselHalf ) ) );
+			hullLocalOut.assign( hullLocal );
 
 			// The hull blocks the sky and the sun from the water under and beside
 			// it. Without this the boat looks pasted on: it is the darkening in the
@@ -426,7 +434,24 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 			// Torn by the same two noise scales as wave foam. A clean ring around
 			// the hull is unmistakably a drawn outline; aeration is patchy.
 			const torn = foamFine.mul( 0.55 ).add( foamPatch.mul( 0.45 ) ).add( 0.30 );
-			foamRaw.assign( max( foamRaw, collar.mul( torn ).mul( 1.5 ) ) );
+
+			/* --- wake ---------------------------------------------------- */
+
+			// Metres astern of the transom, and metres off the track.
+			const astern = max( hullLocalOut.y.negate().sub( u.vesselHalf.y.mul( 0.75 ) ), float( 0.0 ) ).toVar( 'wakeAstern' );
+			const across = abs( hullLocalOut.x ).toVar( 'wakeAcross' );
+
+			// The two Kelvin arms sit on a fixed half-angle from the track — about
+			// 19.5 degrees for any displacement hull at any speed, which is why a
+			// wake is recognisable at all. They are the shape; the centre trail is
+			// just churn, so it spreads and fades much faster.
+			const arm = exp( abs( across.sub( astern.mul( 0.354 ) ) ).mul( - 1.15 ) );
+			const trail = exp( across.div( astern.mul( 0.16 ).add( 1.6 ) ).mul( - 1.5 ) );
+
+			const decay = exp( astern.mul( - 0.021 ) ).mul( smoothstep( 0.0, 2.5, astern ) );
+			const wake = arm.mul( 0.80 ).add( trail.mul( 0.55 ) ).mul( decay ).mul( u.vesselSpeed ).toVar( 'wake' );
+
+			foamRaw.assign( max( foamRaw, collar.add( wake ).mul( torn ).mul( 1.45 ) ) );
 
 		} );
 

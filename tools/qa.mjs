@@ -319,6 +319,9 @@ function setState( { preset, view = 'hero', quality } = {} ) {
 	const v = VIEWS[ view ];
 	const patch = {
 		instant: true,
+		// Hold the vessel: she makes way, and a capture set that takes a minute
+		// would otherwise photograph her from a different distance every time.
+		vesselHove: true,
 		camera: { x: v.x ?? 0, z: v.z ?? 0, y: v.y, yaw: v.yaw, pitch: v.pitch },
 	};
 	if ( preset ) patch.preset = preset;
