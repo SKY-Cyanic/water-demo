@@ -247,6 +247,35 @@ function buildGeometry() {
 	sprit.translate( 0, sheer( 0.985 ) - 0.15, LENGTH_FWD + 0.55 );
 	b.add( sprit, [ 0.42, 0.32, 0.20 ] );
 
+	// --- standing rigging. Four wires, each a hair over a centimetre thick.
+	//     They cost almost nothing and they are most of what separates a mast
+	//     from a stick: a rig reads as tensioned or it reads as a pole.
+	const masthead = [ 0, deckY + 11.2, 1.0 ];
+
+	const strut = ( a, c, r ) => {
+
+		const dx = c[ 0 ] - a[ 0 ], dy = c[ 1 ] - a[ 1 ], dz = c[ 2 ] - a[ 2 ];
+		const len = Math.hypot( dx, dy, dz );
+		const g = new CylinderGeometry( r, r, len, 5 );
+
+		// The cylinder starts along +Y; rotate that onto the span, then translate
+		// to its midpoint.
+		const yaw = Math.atan2( dx, dz );
+		const pitch = Math.atan2( Math.hypot( dx, dz ), dy );
+		g.rotateX( pitch );
+		g.rotateY( yaw );
+		g.translate( ( a[ 0 ] + c[ 0 ] ) / 2, ( a[ 1 ] + c[ 1 ] ) / 2, ( a[ 2 ] + c[ 2 ] ) / 2 );
+		return g;
+
+	};
+
+	const WIRE = [ 0.34, 0.33, 0.30 ];
+
+	b.add( strut( masthead, [ 0, sheer( 0.985 ) + 0.15, LENGTH_FWD + 1.6 ], 0.028 ), WIRE );   // forestay
+	b.add( strut( masthead, [ 0, sheer( 0.02 ) + 0.05, - LENGTH_AFT + 0.4 ], 0.026 ), WIRE );  // backstay
+	b.add( strut( masthead, [ halfBeam( 0.5 ) * 0.94, sheer( 0.5 ), 0.2 ], 0.024 ), WIRE );    // shrouds
+	b.add( strut( masthead, [ - halfBeam( 0.5 ) * 0.94, sheer( 0.5 ), 0.2 ], 0.024 ), WIRE );
+
 	// --- mainsail: a cambered quad from the mast to the boom end. The belly is
 	//     the whole point; a flat sail reads as cardboard.
 	b.add( loft( 10, 10, ( t, v ) => {

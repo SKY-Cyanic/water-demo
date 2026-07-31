@@ -22,6 +22,7 @@ import { SPECTRAL_TIERS, SpectralOcean } from './ocean/spectral.js';
 import { Ocean, createOceanMaterial } from './ocean/material.js';
 import { Buoys } from './props/buoys.js';
 import { Vessel } from './props/vessel.js';
+import { PropReflection } from './props/reflection.js';
 import { UnderwaterPipeline } from './underwater/pipeline.js';
 import { Particles, Seabed } from './underwater/scenery.js';
 import { FlyControls } from './input/controls.js';
@@ -171,6 +172,7 @@ class App {
 
 			this.underwaterPipeline?.setSize( w, h );
 			this.clouds?.setSize( w, h );
+			this.propReflection?.setSize( w, h );
 
 		};
 		this.sizer.apply();
@@ -297,10 +299,33 @@ class App {
 			? new FoamHistory( this.env, this.field, FOAM_TIERS[ tier.foam ] )
 			: null;
 
+		// The reflection target has to exist before the water material is built,
+		// because the material samples it. Only on the spectral path, which is the
+		// only path that has props to reflect.
+		// ?noreflect=1 drops the pass. Same reason as ?cloudscale: at 1080p the
+		// vsync cap swallows everything under 16.67 ms, so cost can only be
+		// attributed by removing the thing and measuring again in the same session.
+		const noReflect = new URLSearchParams( location.search ).has( 'noreflect' );
+
+		this.propReflection = ( this.spectral && ! noReflect ) ? new PropReflection() : null;
+
+		if ( this.propReflection ) {
+
+			this.propReflection.setSize(
+				this.sizer.width * this.sizer.effectiveDpr,
+				this.sizer.height * this.sizer.effectiveDpr
+			);
+
+		}
+
 		const material = createOceanMaterial( this.env, this.field, {
 			reflection: this.skyFns.reflection,
 			aerial: this.skyFns.aerial,
-		}, { foam: this.foam, spectral: this.spectral?.textures ?? null } );
+		}, {
+			foam: this.foam,
+			spectral: this.spectral?.textures ?? null,
+			propReflection: this.propReflection ? this.propReflection.texture : null,
+		} );
 
 		this.ocean = new Ocean( this.env, this.field, geometryInfo, material );
 		this.scene.add( this.ocean.mesh );
@@ -320,6 +345,9 @@ class App {
 			this.vessel = new Vessel( this.env, this.spectral.textures );
 			this.scene.add( this.vessel.mesh );
 			this.env.u.vesselMix.value = 1;
+
+			this.propReflection?.add( this.vessel.mesh );
+			this.propReflection?.add( this.buoys.mesh );
 
 		} else {
 
@@ -368,6 +396,9 @@ class App {
 			this.vessel = null;
 
 		}
+
+		this.propReflection?.dispose();
+		this.propReflection = null;
 
 		this.scene.remove( this.skyMesh );
 		this.skyMesh.geometry.dispose();
@@ -605,7 +636,21 @@ class App {
 
 		// Clouds third — the sky dome composites this target, and underwater the
 		// dome is hidden, so there is nothing to draw it for.
-		if ( this.clouds && this.underwaterFactor < 1 ) this.clouds.render( this.renderer, this.camera );
+		// Both extra passes are gated well before the transition completes. The
+		// factor is damped and settles at 0.999-something, so a `< 1` test never
+		// actually fired and the submerged camera paid for a sky and a reflection
+		// it could not see — eleven frames a second of it.
+		const surfaced = this.underwaterFactor < 0.9;
+
+		if ( this.clouds && surfaced ) this.clouds.render( this.renderer, this.camera );
+
+		// Mirrored props, for the same reason and with the same gate: below the
+		// surface there is no reflection to see.
+		if ( this.propReflection && surfaced ) {
+
+			this.propReflection.render( this.renderer, this.camera );
+
+		}
 
 		// Above water with no bloom there is nothing for the post pipeline to do,
 		// so the scene goes straight to the canvas at zero extra cost.

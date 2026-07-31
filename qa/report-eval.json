@@ -1,9 +1,9 @@
 {
 	"command": "eval",
-	"origin": "http://localhost:8173",
-	"startedAt": "2026-07-31T12:27:52.387Z",
+	"origin": "http://localhost:8173/?x=1",
+	"startedAt": "2026-07-31T13:15:25.143Z",
 	"userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
-	"result": "saved 404",
-	"finishedAt": "2026-07-31T12:27:54.503Z",
+	"result": "17.89 ms",
+	"finishedAt": "2026-07-31T13:15:38.873Z",
 	"ok": true
 }

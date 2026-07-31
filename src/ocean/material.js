@@ -21,7 +21,7 @@ import { DoubleSide, FrontSide, Mesh, MeshBasicNodeMaterial } from 'three/webgpu
 import {
 	Fn, If, cameraPosition, dot, exp, faceDirection, float, length, max, min, mix,
 	mx_fractal_noise_float, normalize, oneMinus, positionGeometry, positionWorld, pow, reflect,
-	refract, saturate, smoothstep, step, texture, varyingProperty, vec2, vec3,
+	refract, saturate, screenUV, smoothstep, step, texture, varyingProperty, vec2, vec3,
 } from 'three/tsl';
 
 import { createWaveEvaluator, foamFromJacobian } from './waves.js';
@@ -229,6 +229,21 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 		const R = liftReflection( reflect( V.negate(), N ) ).toVar( 'R' );
 		const reflection = sky.reflection( R, reflBlur ).toVar( 'reflection' );
 
+		if ( opts.propReflection ) {
+
+			// Mirrored props, sampled at this pixel's own screen position — see the
+			// note in reflection.js for why that is exact for a plane at y = 0. The
+			// offset by the surface gradient is what makes the reflection ripple
+			// with the water instead of sitting on it like a decal; it is scaled
+			// down with distance because a gradient that displaces by half a screen
+			// near the camera displaces the horizon into nonsense.
+			const wobble = grad.mul( oneMinus( smoothstep( 4.0, 90.0, vRadial ) ) ).mul( 0.055 );
+			const rp = texture( opts.propReflection, saturate( screenUV.add( wobble ) ) ).toVar( 'propRefl' );
+
+			reflection.assign( mix( reflection, rp.rgb, saturate( rp.a ).mul( u.vesselMix ) ) );
+
+		}
+
 		/* --- sun specular ---------------------------------------------- */
 
 		// This lobe is now the *only* sun highlight on the water, so it carries the
@@ -347,7 +362,11 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 			// is the ellipse the boat actually occupies rather than its bounding
 			// box. At a 57-degree heading the box is nearly twice the area, and the
 			// foam collar drawn from it read as a raft the boat was sitting on.
-			const rel = P.xz.sub( u.vesselPos.xz ).toVar( 'hullRel' );
+			// Offset opposite the sun by the hull's own height over the sun's
+			// elevation — a shadow is cast, not centred. Clamped because a low sun
+			// would otherwise throw it to the horizon.
+			const drop = u.sunDir.xz.div( max( u.sunDir.y, float( 0.30 ) ) ).mul( 1.4 );
+			const rel = P.xz.sub( u.vesselPos.xz ).add( drop ).toVar( 'hullRel' );
 			const c = u.vesselDir.x, sn = u.vesselDir.y;
 			const local = vec2(
 				rel.x.mul( c ).add( rel.y.mul( sn ) ),
@@ -360,7 +379,7 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 			// it. Without this the boat looks pasted on: it is the darkening in the
 			// water, more than the object itself, that says something is *in* the
 			// sea rather than in front of it.
-			const shade = oneMinus( smoothstep( 0.80, 1.45, hullD ) ).mul( 0.55 ).toVar( 'hullShade' );
+			const shade = oneMinus( smoothstep( 0.72, 1.12, hullD ) ).mul( 0.34 ).toVar( 'hullShade' );
 			body.mulAssign( oneMinus( shade ) );
 
 		} );
