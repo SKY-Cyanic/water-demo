@@ -22,27 +22,27 @@ export const PRESETS = [
 		params: {
 			sunElevation: 62, sunAzimuth: 130, sunIntensity: 1.15, sunColor: '#fff6e8',
 			skyZenith: '#1f6fd0', skyHorizon: '#b7dcf0', skyGround: '#3f6a78',
-			skyGradPower: 3.0, hazeColor: '#dff0f7', hazeStrength: 0.42, hazeFalloff: 34,
+			skyGradPower: 3.0, hazeColor: '#dff0f7', hazeStrength: 0.30, hazeFalloff: 34,
 			sunGlowPower: 260, sunGlowStrength: 1.0, sunDiskSize: 1.0, starIntensity: 0,
 
 			cloudCoverage: 0.22, cloudOpacity: 0.70, cloudScale: 1.40, cloudSpeed: 0.40,
 			cloudLit: '#ffffff', cloudShadow: '#a9c2d4',
 
-			fogColor: '#cfe7f2', fogDensity: 0.030, exposure: 1.0,
+			fogColor: '#cfe7f2', fogDensity: 0.030, exposure: 1.0, rainAmount: 0.0,
 
 			waveHeight: 0.30, waveChoppy: 0.42, windSpeed: 3.2, windAngle: 130,
 			waveScale: 0.45, detailStrength: 0.85,
 
-			waterDeep: '#04525e', waterShallow: '#2fb3ab', waterScatter: '#3fc9b4',
-			waterClarity: 1.9, absorptionR: 0.36, absorptionG: 0.075, absorptionB: 0.035,
+			waterDeep: '#042f66', waterShallow: '#3ac6cd', waterScatter: '#1fb4c6',
+			waterClarity: 1.9, absorptionR: 0.44, absorptionG: 0.055, absorptionB: 0.022,
 			roughness: 0.055, sssStrength: 0.7, reflectivity: 1.0,
 
 			foamAmount: 0.22, foamThreshold: 0.70, foamPersistence: 0.45,
 			foamSharpness: 1.2, foamColor: '#f2fbfd',
 
-			uwTint: '#12a0a8', uwVisibility: 34, causticStrength: 1.25, particleDensity: 0.35,
+			uwTint: '#12a0a8', uwVisibility: 34, causticStrength: 0.95, particleDensity: 0.35,
 
-			seabedEnabled: 1, seabedDepth: 7.5, seabedColor: '#d8c79a',
+			seabedEnabled: 1, seabedDepth: 6.5, seabedColor: '#ded9c6',
 		},
 	},
 
@@ -59,7 +59,7 @@ export const PRESETS = [
 			cloudCoverage: 0.40, cloudOpacity: 0.85, cloudScale: 1.15, cloudSpeed: 0.70,
 			cloudLit: '#ffffff', cloudShadow: '#93a9bd',
 
-			fogColor: '#b9d0e2', fogDensity: 0.055, exposure: 1.0,
+			fogColor: '#b9d0e2', fogDensity: 0.055, exposure: 1.0, rainAmount: 0.0,
 
 			waveHeight: 1.80, waveChoppy: 0.80, windSpeed: 9.5, windAngle: 45,
 			waveScale: 1.0, detailStrength: 1.0,
@@ -90,7 +90,7 @@ export const PRESETS = [
 			cloudCoverage: 0.46, cloudOpacity: 0.90, cloudScale: 1.00, cloudSpeed: 0.50,
 			cloudLit: '#ffd9b0', cloudShadow: '#7d6472',
 
-			fogColor: '#f0b98a', fogDensity: 0.085, exposure: 1.05,
+			fogColor: '#f0b98a', fogDensity: 0.085, exposure: 1.05, rainAmount: 0.0,
 
 			waveHeight: 1.35, waveChoppy: 0.72, windSpeed: 7.5, windAngle: 285,
 			waveScale: 0.95, detailStrength: 1.0,
@@ -121,7 +121,7 @@ export const PRESETS = [
 			cloudCoverage: 0.86, cloudOpacity: 1.00, cloudScale: 0.85, cloudSpeed: 1.80,
 			cloudLit: '#98a4b0', cloudShadow: '#3e4854',
 
-			fogColor: '#78838f', fogDensity: 0.140, exposure: 1.15,
+			fogColor: '#78838f', fogDensity: 0.140, exposure: 1.15, rainAmount: 0.85,
 
 			waveHeight: 5.20, waveChoppy: 0.94, windSpeed: 21, windAngle: 200,
 			waveScale: 1.25, detailStrength: 1.30,
@@ -155,7 +155,7 @@ export const PRESETS = [
 			cloudCoverage: 0.30, cloudOpacity: 0.75, cloudScale: 1.20, cloudSpeed: 0.50,
 			cloudLit: '#7d8ea8', cloudShadow: '#202c3e',
 
-			fogColor: '#182842', fogDensity: 0.060, exposure: 1.50,
+			fogColor: '#182842', fogDensity: 0.060, exposure: 1.50, rainAmount: 0.0,
 
 			waveHeight: 1.15, waveChoppy: 0.70, windSpeed: 7.0, windAngle: 315,
 			waveScale: 1.0, detailStrength: 1.0,
@@ -170,6 +170,176 @@ export const PRESETS = [
 			uwTint: '#06202e', uwVisibility: 14, causticStrength: 0.25, particleDensity: 0.50,
 
 			seabedEnabled: 0, seabedDepth: 40, seabedColor: '#3a4050',
+		},
+	},
+
+	{
+		id: 'trade-winds',
+		label: 'Trade Winds',
+		swatch: '#0e5fa8',
+		params: {
+			// Deep tropical blue under a hard high sun: the water is clear enough
+			// that almost nothing scatters back, so it goes dark and saturated
+			// rather than milky, and every crest reads as a bright cut in it.
+			sunElevation: 58, sunAzimuth: 100, sunIntensity: 1.30, sunColor: '#fff8ec',
+			skyZenith: '#0d3d94', skyHorizon: '#9ec9ea', skyGround: '#2f5f74',
+			skyGradPower: 3.4, hazeColor: '#cfe6f5', hazeStrength: 0.42, hazeFalloff: 30,
+			sunGlowPower: 240, sunGlowStrength: 1.1, sunDiskSize: 1.0, starIntensity: 0,
+
+			cloudCoverage: 0.34, cloudOpacity: 0.92, cloudScale: 1.30, cloudSpeed: 0.95,
+			cloudLit: '#ffffff', cloudShadow: '#8fa8c4',
+
+			fogColor: '#b9d6ec', fogDensity: 0.040, exposure: 1.0, rainAmount: 0.0,
+
+			waveHeight: 1.55, waveChoppy: 0.86, windSpeed: 11.0, windAngle: 100,
+			waveScale: 0.90, detailStrength: 1.15,
+
+			waterDeep: '#01162e', waterShallow: '#0f6ea8', waterScatter: '#14839b',
+			waterClarity: 1.35, absorptionR: 0.46, absorptionG: 0.085, absorptionB: 0.030,
+			roughness: 0.070, sssStrength: 1.10, reflectivity: 1.0,
+
+			foamAmount: 0.62, foamThreshold: 0.55, foamPersistence: 0.68,
+			foamSharpness: 1.05, foamColor: '#f4fbff',
+
+			uwTint: '#0a5a86', uwVisibility: 30, causticStrength: 0.55, particleDensity: 0.40,
+
+			seabedEnabled: 0, seabedDepth: 40, seabedColor: '#7d7660',
+		},
+	},
+
+	{
+		id: 'coral-shallows',
+		label: 'Coral Shallows',
+		swatch: '#37d0b6',
+		params: {
+			// The shallowest preset. Three metres of water over sand and reef, so
+			// the bottom is the subject and the surface is a lens over it.
+			sunElevation: 47, sunAzimuth: 210, sunIntensity: 1.22, sunColor: '#fff4e2',
+			skyZenith: '#2478c8', skyHorizon: '#c6e6f2', skyGround: '#4a7a80',
+			skyGradPower: 2.8, hazeColor: '#e2f4fa', hazeStrength: 0.34, hazeFalloff: 30,
+			sunGlowPower: 220, sunGlowStrength: 1.2, sunDiskSize: 1.0, starIntensity: 0,
+
+			cloudCoverage: 0.30, cloudOpacity: 0.80, cloudScale: 1.55, cloudSpeed: 0.55,
+			cloudLit: '#ffffff', cloudShadow: '#a8c6d6',
+
+			fogColor: '#d6eef6', fogDensity: 0.028, exposure: 1.0, rainAmount: 0.0,
+
+			waveHeight: 0.55, waveChoppy: 0.52, windSpeed: 4.6, windAngle: 210,
+			waveScale: 0.50, detailStrength: 1.0,
+
+			waterDeep: '#03518f', waterShallow: '#3fd8d2', waterScatter: '#22c2cf',
+			waterClarity: 2.3, absorptionR: 0.48, absorptionG: 0.048, absorptionB: 0.018,
+			roughness: 0.050, sssStrength: 0.85, reflectivity: 1.0,
+
+			foamAmount: 0.28, foamThreshold: 0.66, foamPersistence: 0.50,
+			foamSharpness: 1.15, foamColor: '#f6fdff',
+
+			uwTint: '#15b0ac', uwVisibility: 42, causticStrength: 1.05, particleDensity: 0.25,
+
+			seabedEnabled: 1, seabedDepth: 3.6, seabedColor: '#e9ece4',
+		},
+	},
+
+	{
+		id: 'arctic',
+		label: 'Arctic',
+		swatch: '#7e97a8',
+		params: {
+			// A low sun through thin overcast. Almost no colour anywhere, so what
+			// carries the frame is the long specular sheet the low sun lays down
+			// the middle of it.
+			sunElevation: 9, sunAzimuth: 165, sunIntensity: 0.62, sunColor: '#e8eef6',
+			skyZenith: '#4a6b88', skyHorizon: '#b9c8d4', skyGround: '#41525e',
+			skyGradPower: 2.6, hazeColor: '#cbd8e2', hazeStrength: 0.72, hazeFalloff: 16,
+			sunGlowPower: 70, sunGlowStrength: 1.05, sunDiskSize: 0.85, starIntensity: 0,
+
+			cloudCoverage: 0.70, cloudOpacity: 0.95, cloudScale: 1.70, cloudSpeed: 0.65,
+			cloudLit: '#dfe8f0', cloudShadow: '#7b8c9c',
+
+			fogColor: '#c2d1dd', fogDensity: 0.090, exposure: 1.05, rainAmount: 0.0,
+
+			waveHeight: 0.85, waveChoppy: 0.58, windSpeed: 5.5, windAngle: 165,
+			waveScale: 1.10, detailStrength: 0.80,
+
+			waterDeep: '#08151d', waterShallow: '#22505f', waterScatter: '#2c5f6b',
+			waterClarity: 1.15, absorptionR: 0.44, absorptionG: 0.125, absorptionB: 0.080,
+			roughness: 0.055, sssStrength: 0.35, reflectivity: 1.0,
+
+			foamAmount: 0.34, foamThreshold: 0.62, foamPersistence: 0.80,
+			foamSharpness: 1.0, foamColor: '#eaf1f7',
+
+			uwTint: '#123542', uwVisibility: 16, causticStrength: 0.18, particleDensity: 0.70,
+
+			seabedEnabled: 0, seabedDepth: 40, seabedColor: '#4e5560',
+		},
+	},
+
+	{
+		id: 'dusk',
+		label: 'Dusk',
+		swatch: '#6b6392',
+		params: {
+			// The blue hour: the sun is on the horizon, so there is no disc worth
+			// speaking of and no glitter track — only a broad mauve wash the water
+			// mirrors almost perfectly, because at this grazing angle Fresnel is
+			// close to one everywhere.
+			sunElevation: 0.6, sunAzimuth: 258, sunIntensity: 0.42, sunColor: '#ffb59a',
+			skyZenith: '#1d2450', skyHorizon: '#c69ab0', skyGround: '#2c2b40',
+			skyGradPower: 2.0, hazeColor: '#d3a9b8', hazeStrength: 0.62, hazeFalloff: 17,
+			sunGlowPower: 55, sunGlowStrength: 1.9, sunDiskSize: 0.60, starIntensity: 0.30,
+
+			cloudCoverage: 0.44, cloudOpacity: 0.88, cloudScale: 1.25, cloudSpeed: 0.55,
+			cloudLit: '#e5b8b6', cloudShadow: '#4c4569',
+
+			fogColor: '#a894ab', fogDensity: 0.070, exposure: 1.30, rainAmount: 0.0,
+
+			waveHeight: 1.05, waveChoppy: 0.66, windSpeed: 6.5, windAngle: 258,
+			waveScale: 1.05, detailStrength: 0.90,
+
+			waterDeep: '#050a19', waterShallow: '#1c3b52', waterScatter: '#2a4666',
+			waterClarity: 1.0, absorptionR: 0.44, absorptionG: 0.13, absorptionB: 0.075,
+			roughness: 0.050, sssStrength: 0.80, reflectivity: 1.0,
+
+			foamAmount: 0.42, foamThreshold: 0.60, foamPersistence: 0.74,
+			foamSharpness: 1.0, foamColor: '#d9cdd6',
+
+			uwTint: '#0d2438', uwVisibility: 13, causticStrength: 0.10, particleDensity: 0.55,
+
+			seabedEnabled: 0, seabedDepth: 40, seabedColor: '#4a4450',
+		},
+	},
+
+	{
+		id: 'sea-fog',
+		label: 'Sea Fog',
+		swatch: '#96a09e',
+		params: {
+			// Visibility measured in tens of metres. Everything past the near swell
+			// dissolves, which puts the whole burden of the shot on the foreground
+			// water — and on the rain stippling the frame.
+			sunElevation: 17, sunAzimuth: 320, sunIntensity: 0.34, sunColor: '#d8d6cf',
+			skyZenith: '#5a6266', skyHorizon: '#9aa2a3', skyGround: '#4a5052',
+			skyGradPower: 1.8, hazeColor: '#a6adae', hazeStrength: 0.94, hazeFalloff: 7,
+			sunGlowPower: 26, sunGlowStrength: 0.60, sunDiskSize: 0.55, starIntensity: 0,
+
+			cloudCoverage: 0.78, cloudOpacity: 0.85, cloudScale: 1.60, cloudSpeed: 1.10,
+			cloudLit: '#9aa2a4', cloudShadow: '#5d6567',
+
+			fogColor: '#a1a8a9', fogDensity: 2.100, exposure: 1.20, rainAmount: 0.55,
+
+			waveHeight: 1.30, waveChoppy: 0.70, windSpeed: 7.0, windAngle: 320,
+			waveScale: 1.30, detailStrength: 0.95,
+
+			waterDeep: '#0a1416', waterShallow: '#28464a', waterScatter: '#33565a',
+			waterClarity: 0.75, absorptionR: 0.48, absorptionG: 0.18, absorptionB: 0.115,
+			roughness: 0.075, sssStrength: 0.45, reflectivity: 1.0,
+
+			foamAmount: 0.52, foamThreshold: 0.56, foamPersistence: 0.82,
+			foamSharpness: 0.95, foamColor: '#dfe4e4',
+
+			uwTint: '#14282c', uwVisibility: 8, causticStrength: 0.08, particleDensity: 1.0,
+
+			seabedEnabled: 0, seabedDepth: 40, seabedColor: '#454842',
 		},
 	},
 

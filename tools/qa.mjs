@@ -346,6 +346,11 @@ async function shots( chrome ) {
 		[ 'golden-hour', 'qa-golden-hour.png', 'sunward' ],
 		[ 'storm-front', 'qa-storm-front.png', 'high' ],
 		[ 'moonlit', 'qa-moonlit.png', 'hero' ],
+		[ 'trade-winds', 'qa-trade-winds.png', 'hero' ],
+		[ 'coral-shallows', 'qa-coral-shallows.png', 'lagoon' ],
+		[ 'arctic', 'qa-arctic.png', 'low' ],
+		[ 'dusk', 'qa-dusk.png', 'sunward' ],
+		[ 'sea-fog', 'qa-sea-fog.png', 'hero' ],
 	];
 
 	for ( const [ preset, file, view ] of presets ) {

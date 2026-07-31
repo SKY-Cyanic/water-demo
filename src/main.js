@@ -13,6 +13,7 @@ import { Diagnostics, installQAHooks } from './core/diagnostics.js';
 import { clamp, damp } from './core/util.js';
 import { createEnv, syncUniforms } from './env/uniforms.js';
 import { createAerialSkyFn, createReflectionSkyFn, createSkyFn } from './env/sky.js';
+import { CloudLayer } from './env/clouds.js';
 import { DEFAULT_PRESET, PRESETS, PresetMixer } from './env/presets.js';
 import { GEOMETRY_TIERS, createOceanGeometry } from './ocean/geometry.js';
 import { WaveField } from './ocean/waves.js';
@@ -27,9 +28,9 @@ import { Hud, Panel } from './ui/panel.js';
 
 const QUALITY = {
 	low: { geometry: 'low', foam: 'low', waves: 14, cloudOctaves: 3, dpr: DPR_CAP.low, foamHistory: false, particles: 900, volumetricClouds: false, cloudSteps: 0, bloom: false },
-	medium: { geometry: 'medium', foam: 'medium', waves: 18, cloudOctaves: 3, dpr: DPR_CAP.medium, foamHistory: true, particles: 1800, volumetricClouds: true, cloudSteps: 6, bloom: true },
-	high: { geometry: 'high', foam: 'high', waves: 20, cloudOctaves: 3, dpr: DPR_CAP.high, foamHistory: true, particles: 2600, volumetricClouds: true, cloudSteps: 7, bloom: true },
-	ultra: { geometry: 'ultra', foam: 'ultra', waves: 24, cloudOctaves: 3, dpr: DPR_CAP.ultra, foamHistory: true, particles: 4200, volumetricClouds: true, cloudSteps: 10, bloom: true },
+	medium: { geometry: 'medium', foam: 'medium', waves: 18, cloudOctaves: 4, dpr: DPR_CAP.medium, foamHistory: true, particles: 1800, volumetricClouds: true, cloudSteps: 16, bloom: true },
+	high: { geometry: 'high', foam: 'high', waves: 20, cloudOctaves: 5, dpr: DPR_CAP.high, foamHistory: true, particles: 2600, volumetricClouds: true, cloudSteps: 24, bloom: true },
+	ultra: { geometry: 'ultra', foam: 'ultra', waves: 24, cloudOctaves: 6, dpr: DPR_CAP.ultra, foamHistory: true, particles: 4200, volumetricClouds: true, cloudSteps: 36, bloom: true },
 };
 
 const WAVE_SEED = 20250731;
@@ -165,7 +166,12 @@ class App {
 		installQAHooks( this );
 
 		this.renderer.toneMappingExposure = this.env.params.exposure;
-		this.sizer.onResize = ( w, h ) => this.underwaterPipeline?.setSize( w, h );
+		this.sizer.onResize = ( w, h ) => {
+
+			this.underwaterPipeline?.setSize( w, h );
+			this.clouds?.setSize( w, h );
+
+		};
 		this.sizer.apply();
 
 		this._running = true;
@@ -196,19 +202,47 @@ class App {
 
 	buildSky() {
 
-		const octaves = QUALITY[ this.quality ].cloudOctaves;
-
 		const tier = QUALITY[ this.quality ];
+		const octaves = tier.cloudOctaves;
+
+		// The marched cloud slab renders into its own half-resolution target; the
+		// dome only composites it. Gated to WebGPU for the same reason as bloom —
+		// the fallback is a compatibility path, and it keeps the flat sheet.
+		//
+		// The reflection and aerial variants keep the flat sheet regardless.
+		// Reflected clouds are blurred by surface roughness anyway, and the cloud
+		// target is screen-space: there is no reflected pixel to look up in it.
+		const wantClouds = tier.volumetricClouds && this.renderer.backend?.isWebGPUBackend === true;
+
+		// ?cloudscale=<0..1> overrides the cloud target's resolution fraction, and
+		// ?cloudscale=0 disables the layer outright. Tuning aid: it is the only way
+		// to attribute frame time to the march rather than to the rest of the scene,
+		// since at 1080p everything else sits under the vsync cap and is invisible.
+		const scaleParam = parseFloat( new URLSearchParams( location.search ).get( 'cloudscale' ) );
+		const cloudScale = Number.isFinite( scaleParam ) ? scaleParam : 0.4;
+
+		this.clouds = wantClouds && cloudScale > 0
+			? new CloudLayer( this.env, {
+				cloudOctaves: octaves,
+				marchSteps: parseInt( new URLSearchParams( location.search ).get( 'cloudsteps' ), 10 ) || tier.cloudSteps,
+				scale: cloudScale,
+			} )
+			: null;
+
+		if ( this.clouds ) {
+
+			this.clouds.setSize(
+				this.sizer.width * this.sizer.effectiveDpr,
+				this.sizer.height * this.sizer.effectiveDpr
+			);
+
+		}
 
 		this.skyFns = {
-			// The dome marches an actual cloud slab; the reflection and aerial
-			// variants keep the cheap flat sheet. Reflected clouds are blurred by
-			// surface roughness anyway, and marching a volume per reflected pixel
-			// would cost more than the entire ocean.
 			dome: createSkyFn( this.env, {
 				cloudOctaves: octaves,
-				volumetric: tier.volumetricClouds,
-				marchSteps: tier.cloudSteps,
+				cloudTexture: this.clouds ? this.clouds.texture : null,
+				cloudTexel: this.clouds ? this.clouds.uTexel : null,
 			} ),
 			reflection: createReflectionSkyFn( this.env ),
 			aerial: createAerialSkyFn( this.env ),
@@ -319,6 +353,8 @@ class App {
 		this.scene.remove( this.skyMesh );
 		this.skyMesh.geometry.dispose();
 		this.skyMesh.material.dispose();
+		this.clouds?.dispose();
+		this.clouds = null;
 
 		this.scene.remove( this.particles.points );
 		this.particles.dispose();
@@ -548,6 +584,10 @@ class App {
 		// Foam history second: the surface samples the texture this pass writes.
 		if ( this.foam && ! this.paused ) this.foam.update( this.renderer, this.camera, this._frameDt );
 
+		// Clouds third — the sky dome composites this target, and underwater the
+		// dome is hidden, so there is nothing to draw it for.
+		if ( this.clouds && this.underwaterFactor < 1 ) this.clouds.render( this.renderer, this.camera );
+
 		// Above water with no bloom there is nothing for the post pipeline to do,
 		// so the scene goes straight to the canvas at zero extra cost.
 		const needsPost = this.underwaterPipeline
@@ -648,11 +688,12 @@ class App {
 
 				default: {
 
-					// 1-5 jump straight to a preset.
-					const m = /^Digit([1-9])$/.exec( e.code );
+					// 1-9 and 0 jump straight to a preset.
+					const m = /^Digit([0-9])$/.exec( e.code );
 					if ( m ) {
 
-						const preset = PRESETS[ Number( m[ 1 ] ) - 1 ];
+						const index = m[ 1 ] === '0' ? 9 : Number( m[ 1 ] ) - 1;
+						const preset = PRESETS[ index ];
 						if ( preset ) {
 
 							this.applyPreset( preset.id );

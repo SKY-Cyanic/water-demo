@@ -22,7 +22,7 @@ export const SCALAR_KEYS = [
 	// clouds
 	'cloudCoverage', 'cloudOpacity', 'cloudScale', 'cloudSpeed',
 	// atmosphere
-	'fogDensity', 'exposure',
+	'fogDensity', 'exposure', 'rainAmount',
 	// waves
 	'waveHeight', 'waveChoppy', 'windSpeed', 'windAngle', 'waveScale', 'detailStrength',
 	// water optics
@@ -107,6 +107,9 @@ export function createEnv() {
 		foamSharpness: 1.0,
 		foamColor: '#eef6fa',
 
+		/* --- weather ---------------------------------------------------- */
+		rainAmount: 0.0,
+
 		/* --- underwater ------------------------------------------------ */
 		uwTint: '#0d5566',
 		uwVisibility: 26.0,      // metres
@@ -179,6 +182,9 @@ export function createEnv() {
 		foamThreshold: uniform( 0.52 ),
 		foamSharpness: uniform( 1 ),
 		foamColor: uniform( new Color() ),
+
+		/* weather */
+		rainAmount: uniform( 0 ),
 
 		/* underwater */
 		uwTint: uniform( new Color() ),
@@ -302,6 +308,8 @@ export function syncUniforms( env, dt = 0 ) {
 	u.foamThreshold.value = p.foamThreshold;
 	u.foamSharpness.value = p.foamSharpness;
 	setColor( u.foamColor.value, p.foamColor );
+
+	u.rainAmount.value = p.rainAmount ?? 0;
 
 	setColor( u.uwTint.value, p.uwTint );
 	u.uwVisibility.value = p.uwVisibility;

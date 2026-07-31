@@ -1,21 +1,21 @@
 {
 	"command": "stress",
 	"origin": "http://localhost:8173",
-	"startedAt": "2026-07-31T06:03:24.495Z",
+	"startedAt": "2026-07-31T09:18:29.098Z",
 	"userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
 	"stress": {
 		"resize": {
 			"backend": "WebGPU",
 			"quality": "high",
 			"preset": "open-sea",
-			"fps": 59.9,
-			"frameMs": 16.71,
-			"onePercentLow": 53.5,
+			"fps": 60,
+			"frameMs": 16.66,
+			"onePercentLow": 57.1,
 			"viewport": "1600x900",
 			"devicePixelRatio": 1,
-			"triangles": 345827,
+			"triangles": 348542,
 			"cameraY": 4.5,
-			"surfaceY": 0.17,
+			"surfaceY": 0.19,
 			"underwater": 0,
 			"consoleErrors": 0,
 			"errors": []
@@ -24,27 +24,27 @@
 		"presetSwitch": [
 			{
 				"id": "calm-lagoon",
-				"worstFrameMs": 30.5
+				"worstFrameMs": 29.1
 			},
 			{
 				"id": "open-sea",
-				"worstFrameMs": 19.3
+				"worstFrameMs": 23.9
 			},
 			{
 				"id": "golden-hour",
-				"worstFrameMs": 19.4
+				"worstFrameMs": 18
 			},
 			{
 				"id": "storm-front",
-				"worstFrameMs": 19.7
+				"worstFrameMs": 17.7
 			},
 			{
 				"id": "moonlit",
-				"worstFrameMs": 19.3
+				"worstFrameMs": 18.1
 			},
 			{
 				"id": "open-sea",
-				"worstFrameMs": 19.2
+				"worstFrameMs": 18.7
 			}
 		],
 		"mediumCrossing": {
@@ -55,13 +55,13 @@
 					"to": true
 				},
 				{
-					"i": 84,
-					"y": 0.68,
+					"i": 83,
+					"y": 0.66,
 					"to": false
 				},
 				{
-					"i": 358,
-					"y": -0.16,
+					"i": 355,
+					"y": -0.1,
 					"to": true
 				}
 			],
@@ -71,26 +71,26 @@
 			"backend": "WebGPU",
 			"quality": "high",
 			"preset": "open-sea",
-			"fps": 59.6,
-			"frameMs": 16.77,
-			"onePercentLow": 53.5,
+			"fps": 60,
+			"frameMs": 16.67,
+			"onePercentLow": 30,
 			"viewport": "1920x1080",
 			"devicePixelRatio": 0.9,
-			"triangles": 343619,
+			"triangles": 346334,
 			"cameraY": -0.98,
-			"surfaceY": 0.06,
-			"underwater": 0.999999999994709,
+			"surfaceY": 0.05,
+			"underwater": 0.9999999999999997,
 			"consoleErrors": 0,
 			"errors": []
 		},
 		"memory": {
-			"startBytes": 20563476,
-			"endBytes": 18841340,
-			"deltaBytes": -1722136
+			"startBytes": 34782992,
+			"endBytes": 35869329,
+			"deltaBytes": 1086337
 		},
 		"consoleErrors": [],
 		"pageErrors": []
 	},
-	"finishedAt": "2026-07-31T06:04:05.222Z",
+	"finishedAt": "2026-07-31T09:19:12.263Z",
 	"ok": true
 }

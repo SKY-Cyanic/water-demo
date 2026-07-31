@@ -1,7 +1,7 @@
 {
 	"command": "shots",
 	"origin": "http://localhost:8173",
-	"startedAt": "2026-07-31T07:07:55.620Z",
+	"startedAt": "2026-07-31T09:23:10.228Z",
 	"userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
 	"shots": {
 		"qa-open-sea.png": "qa/qa-open-sea.png",
@@ -9,6 +9,11 @@
 		"qa-golden-hour.png": "qa/qa-golden-hour.png",
 		"qa-storm-front.png": "qa/qa-storm-front.png",
 		"qa-moonlit.png": "qa/qa-moonlit.png",
+		"qa-trade-winds.png": "qa/qa-trade-winds.png",
+		"qa-coral-shallows.png": "qa/qa-coral-shallows.png",
+		"qa-arctic.png": "qa/qa-arctic.png",
+		"qa-dusk.png": "qa/qa-dusk.png",
+		"qa-sea-fog.png": "qa/qa-sea-fog.png",
 		"qa-underwater.png": "qa/qa-underwater.png",
 		"qa-underwater-up.png": "qa/qa-underwater-up.png",
 		"qa-underwater-open.png": "qa/qa-underwater-open.png",
@@ -16,6 +21,6 @@
 		"fallbackBackend": "WebGL 2",
 		"fallbackErrors": []
 	},
-	"finishedAt": "2026-07-31T07:08:16.122Z",
+	"finishedAt": "2026-07-31T09:23:46.552Z",
 	"ok": true
 }

@@ -126,6 +126,10 @@ export class Diagnostics {
  */
 export function installQAHooks( app ) {
 
+	// The live app object, for one-off diagnostics that do not deserve a
+	// permanent hook of their own.
+	window.__app = app;
+
 	/**
 	 * Measure for `seconds`, then resolve with real numbers.
 	 * Usage from the harness:  await window.__perf(30)
