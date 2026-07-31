@@ -1,7 +1,7 @@
 {
 	"command": "perf",
 	"origin": "http://localhost:8173",
-	"startedAt": "2026-07-31T13:41:23.337Z",
+	"startedAt": "2026-07-31T13:49:41.912Z",
 	"userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
 	"perf": [
 		{
@@ -11,7 +11,7 @@
 			"devicePixelRatio": 1,
 			"viewport": "1920x1080",
 			"drawingBuffer": "1920x1080",
-			"triangles": 353750,
+			"triangles": 355814,
 			"drawCalls": 12,
 			"preset": "open-sea",
 			"underwater": false,
@@ -21,9 +21,9 @@
 			"avgFps": 60,
 			"avgMs": 16.67,
 			"medianMs": 16.7,
-			"p95Ms": 17.2,
-			"onePercentLowFps": 56.8,
-			"worstMs": 17.7
+			"p95Ms": 17.6,
+			"onePercentLowFps": 56.5,
+			"worstMs": 17.8
 		},
 		{
 			"backend": "WebGPU",
@@ -32,7 +32,7 @@
 			"devicePixelRatio": 1,
 			"viewport": "1280x720",
 			"drawingBuffer": "1280x720",
-			"triangles": 353750,
+			"triangles": 355814,
 			"drawCalls": 12,
 			"preset": "open-sea",
 			"underwater": false,
@@ -42,8 +42,8 @@
 			"avgFps": 60,
 			"avgMs": 16.67,
 			"medianMs": 16.7,
-			"p95Ms": 17.4,
-			"onePercentLowFps": 56.8,
+			"p95Ms": 17.6,
+			"onePercentLowFps": 56.5,
 			"worstMs": 17.7
 		},
 		{
@@ -53,7 +53,7 @@
 			"devicePixelRatio": 1,
 			"viewport": "1920x1080",
 			"drawingBuffer": "1920x1080",
-			"triangles": 353750,
+			"triangles": 355814,
 			"drawCalls": 12,
 			"preset": "storm-front",
 			"underwater": false,
@@ -63,7 +63,7 @@
 			"avgFps": 60,
 			"avgMs": 16.67,
 			"medianMs": 16.7,
-			"p95Ms": 17.4,
+			"p95Ms": 17.6,
 			"onePercentLowFps": 56.8,
 			"worstMs": 17.7
 		},
@@ -84,8 +84,8 @@
 			"avgFps": 60,
 			"avgMs": 16.67,
 			"medianMs": 16.7,
-			"p95Ms": 17.4,
-			"onePercentLowFps": 56.8,
+			"p95Ms": 17.6,
+			"onePercentLowFps": 56.5,
 			"worstMs": 17.7
 		},
 		{
@@ -95,19 +95,19 @@
 			"devicePixelRatio": 2,
 			"viewport": "1920x1080",
 			"drawingBuffer": "3840x2160",
-			"triangles": 599382,
+			"triangles": 601446,
 			"drawCalls": 12,
 			"preset": "open-sea",
 			"underwater": false,
 			"label": "3840x2160 ultra (headroom probe)",
 			"seconds": 10,
-			"frames": 170,
-			"avgFps": 16.9,
-			"avgMs": 59.02,
-			"medianMs": 66.6,
+			"frames": 195,
+			"avgFps": 19.5,
+			"avgMs": 51.37,
+			"medianMs": 50,
 			"p95Ms": 66.7,
-			"onePercentLowFps": 14.9,
-			"worstMs": 83.3
+			"onePercentLowFps": 14.8,
+			"worstMs": 67.5
 		},
 		{
 			"backend": "WebGPU",
@@ -116,21 +116,21 @@
 			"devicePixelRatio": 1,
 			"viewport": "1920x1080",
 			"drawingBuffer": "1920x1080",
-			"triangles": 397902,
+			"triangles": 398934,
 			"drawCalls": 10,
 			"preset": "calm-lagoon",
 			"underwater": true,
 			"label": "1920x1080 high underwater",
 			"seconds": 10,
-			"frames": 577,
-			"avgFps": 57.6,
-			"avgMs": 17.36,
+			"frames": 600,
+			"avgFps": 60,
+			"avgMs": 16.67,
 			"medianMs": 16.7,
-			"p95Ms": 17.3,
-			"onePercentLowFps": 29.9,
-			"worstMs": 33.4
+			"p95Ms": 17.6,
+			"onePercentLowFps": 56.5,
+			"worstMs": 17.7
 		}
 	],
-	"finishedAt": "2026-07-31T13:42:50.022Z",
+	"finishedAt": "2026-07-31T13:51:08.587Z",
 	"ok": true
 }

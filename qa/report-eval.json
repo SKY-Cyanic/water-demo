@@ -1,9 +1,9 @@
 {
 	"command": "eval",
-	"origin": "http://localhost:8173/?x=1",
-	"startedAt": "2026-07-31T13:15:25.143Z",
+	"origin": "http://localhost:8173",
+	"startedAt": "2026-07-31T13:51:10.938Z",
 	"userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
-	"result": "17.89 ms",
-	"finishedAt": "2026-07-31T13:15:38.873Z",
+	"result": "3608 tris",
+	"finishedAt": "2026-07-31T13:51:11.603Z",
 	"ok": true
 }

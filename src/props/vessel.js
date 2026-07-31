@@ -290,6 +290,81 @@ function buildGeometry() {
 	b.add( strut( masthead, [ halfBeam( 0.5 ) * 0.94, sheer( 0.5 ), 0.2 ], 0.024 ), WIRE, PART.wire );    // shrouds
 	b.add( strut( masthead, [ - halfBeam( 0.5 ) * 0.94, sheer( 0.5 ), 0.2 ], 0.024 ), WIRE, PART.wire );
 
+	// --- mizzen. Making her a ketch is the cheapest large change available to
+	//     the silhouette: a second, shorter mast aft breaks the single-triangle
+	//     read that any sloop has from a distance, and it costs one spar, one
+	//     boom and one sail.
+	const mizZ = - 4.3;
+	const mizHead = [ 0, deckY + 8.0, mizZ ];
+
+	const mizzen = new CylinderGeometry( 0.065, 0.10, 8.2, 8 );
+	mizzen.translate( 0, deckY + 4.1, mizZ );
+	b.add( mizzen, [ 0.42, 0.32, 0.20 ], PART.spar );
+
+	const mizBoom = new CylinderGeometry( 0.055, 0.065, 3.0, 8 );
+	mizBoom.rotateX( Math.PI / 2 );
+	mizBoom.translate( 0, deckY + 1.2, mizZ - 1.5 );
+	b.add( mizBoom, [ 0.42, 0.32, 0.20 ], PART.spar );
+
+	b.add( strut( mizHead, [ 0, sheer( 0.02 ) + 0.05, - LENGTH_AFT + 0.5 ], 0.022 ), WIRE, PART.wire );
+	b.add( strut( mizHead, [ halfBeam( 0.28 ) * 0.92, sheer( 0.28 ), mizZ ], 0.020 ), WIRE, PART.wire );
+	b.add( strut( mizHead, [ - halfBeam( 0.28 ) * 0.92, sheer( 0.28 ), mizZ ], 0.020 ), WIRE, PART.wire );
+
+	b.add( loft( 8, 8, ( t, v ) => {
+
+		const luffY = deckY + 1.2 + t * 6.6;
+		const foot = mizZ - 3.0;
+		const chord = ( 1 - t ) * foot + t * ( mizZ - 0.5 );
+		const belly = Math.sin( Math.PI * v ) * Math.sin( Math.PI * t * 0.9 ) * 0.42;
+
+		return [ belly, luffY - v * 0.22, mizZ + v * ( chord - mizZ ) ];
+
+	} ), [ 0.78, 0.76, 0.70 ], PART.sail );
+
+	// --- gaff: the spar along the head of the mainsail. It is what makes a rig
+	//     read as working craft rather than as a modern triangle.
+	b.add( strut(
+		[ 0, deckY + 8.6, 1.0 ],
+		[ 0, deckY + 10.6, - 1.9 ],
+		0.06
+	), [ 0.42, 0.32, 0.20 ], PART.spar );
+
+	// --- rail: stanchions along the sheer with a wire run through them. Small,
+	//     repeated, and everywhere the eye goes — which is exactly the kind of
+	//     detail that separates a shape from a boat.
+	const railTop = ( t ) => [
+		halfBeam( t ) * 0.97, sheer( t ) + 0.60, zAt( t ),
+	];
+
+	for ( let i = 0; i <= 9; i ++ ) {
+
+		const t = 0.10 + ( i / 9 ) * 0.80;
+		const top = railTop( t );
+
+		for ( const sign of [ 1, - 1 ] ) {
+
+			b.add( strut(
+				[ sign * halfBeam( t ) * 0.97, sheer( t ), zAt( t ) ],
+				[ sign * top[ 0 ], top[ 1 ], top[ 2 ] ],
+				0.026
+			), [ 0.46, 0.46, 0.44 ], PART.wire );
+
+			if ( i > 0 ) {
+
+				const p = 0.10 + ( ( i - 1 ) / 9 ) * 0.80;
+				const a = railTop( p );
+				b.add( strut(
+					[ sign * a[ 0 ], a[ 1 ], a[ 2 ] ],
+					[ sign * top[ 0 ], top[ 1 ], top[ 2 ] ],
+					0.018
+				), [ 0.52, 0.52, 0.50 ], PART.wire );
+
+			}
+
+		}
+
+	}
+
 	// --- mainsail: a cambered quad from the mast to the boom end. The belly is
 	//     the whole point; a flat sail reads as cardboard.
 	b.add( loft( 10, 10, ( t, v ) => {
