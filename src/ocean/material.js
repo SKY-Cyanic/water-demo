@@ -445,11 +445,15 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 			// 19.5 degrees for any displacement hull at any speed, which is why a
 			// wake is recognisable at all. They are the shape; the centre trail is
 			// just churn, so it spreads and fades much faster.
-			const arm = exp( abs( across.sub( astern.mul( 0.354 ) ) ).mul( - 1.15 ) );
-			const trail = exp( across.div( astern.mul( 0.16 ).add( 1.6 ) ).mul( - 1.5 ) );
+			const arm = exp( abs( across.sub( astern.mul( 0.354 ) ) ).mul( - 1.9 ) );
+			const trail = exp( across.div( astern.mul( 0.16 ).add( 1.6 ) ).mul( - 2.2 ) );
 
-			const decay = exp( astern.mul( - 0.021 ) ).mul( smoothstep( 0.0, 2.5, astern ) );
-			const wake = arm.mul( 0.80 ).add( trail.mul( 0.55 ) ).mul( decay ).mul( u.vesselSpeed ).toVar( 'wake' );
+			// Three knots is a modest wake. The first pass poured a solid white
+			// river down the arms because the amount fed straight past the foam
+			// mask's upper threshold and saturated — everything above 0.70 looks
+			// identical, so the whole trail flattened into one shape with no edge.
+			const decay = exp( astern.mul( - 0.045 ) ).mul( smoothstep( 0.0, 3.0, astern ) );
+			const wake = arm.mul( 0.42 ).add( trail.mul( 0.26 ) ).mul( decay ).mul( u.vesselSpeed ).toVar( 'wake' );
 
 			foamRaw.assign( max( foamRaw, collar.add( wake ).mul( torn ).mul( 1.45 ) ) );
 
