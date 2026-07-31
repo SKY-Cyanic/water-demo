@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<!--
+	Numerical verification for the GPU FFT.
+
+	This page exists because a subtly-wrong transform still produces a
+	plausible-looking ocean. Comparing the GPU result against a straightforward
+	CPU DFT, element by element, is the only way to know the transform is right
+	before any of it reaches a shader.
+
+	Run via:  node tools/qa.mjs fft
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FFT verification</title>
+<script type="importmap">
+{
+	"imports": {
+		"three": "../vendor/three-0.185.1/three.webgpu.js",
+		"three/webgpu": "../vendor/three-0.185.1/three.webgpu.js",
+		"three/tsl": "../vendor/three-0.185.1/three.tsl.js"
+	}
+}
+</script>
+<style>body{background:#0a0f14;color:#cfe;font:13px ui-monospace,monospace;padding:20px;white-space:pre}</style>
+</head>
+<body>
+<div id="out">running…</div>
+
+<script type="module">
+import { WebGPURenderer } from 'three/webgpu';
+import { BatchedFFT } from '../src/ocean/fft.js';
+import { referenceDFT1D, buildInitialSpectrum, significantHeightOf, CASCADES } from '../src/ocean/spectrum.js';
+import { SpectralOcean } from '../src/ocean/spectral.js';
+
+const out = document.getElementById( 'out' );
+const log = ( s ) => { out.textContent += '\n' + s; };
+
+const renderer = new WebGPURenderer( { antialias: false, forceWebGL: false } );
+await renderer.init();
+
+window.__backend = renderer.backend?.isWebGPUBackend ? 'WebGPU' : 'WebGL 2';
+out.textContent = 'backend: ' + window.__backend;
+
+/**
+ * Reference 2D DFT built from the 1D reference: rows then columns.
+ * Deliberately naive — it is the thing being trusted.
+ */
+function referenceDFT2D( re, im, N, sign ) {
+
+	const tr = new Float64Array( N * N );
+	const ti = new Float64Array( N * N );
+
+	// rows
+	for ( let y = 0; y < N; y ++ ) {
+
+		const rr = new Float32Array( N );
+		const ri = new Float32Array( N );
+		for ( let x = 0; x < N; x ++ ) { rr[ x ] = re[ y * N + x ]; ri[ x ] = im[ y * N + x ]; }
+		const r = referenceDFT1D( rr, ri, sign );
+		for ( let x = 0; x < N; x ++ ) { tr[ y * N + x ] = r.re[ x ]; ti[ y * N + x ] = r.im[ x ]; }
+
+	}
+
+	// columns
+	const or_ = new Float64Array( N * N );
+	const oi = new Float64Array( N * N );
+
+	for ( let x = 0; x < N; x ++ ) {
+
+		const cr = new Float32Array( N );
+		const ci = new Float32Array( N );
+		for ( let y = 0; y < N; y ++ ) { cr[ y ] = tr[ y * N + x ]; ci[ y ] = ti[ y * N + x ]; }
+		const c = referenceDFT1D( cr, ci, sign );
+		for ( let y = 0; y < N; y ++ ) { or_[ y * N + x ] = c.re[ y ]; oi[ y * N + x ] = c.im[ y ]; }
+
+	}
+
+	return { re: or_, im: oi };
+
+}
+
+window.__fftTest = async ( N = 16, planes = 2, sign = 1 ) => {
+
+	const fft = new BatchedFFT( N, planes );
+	const attr = fft.a.value;
+	const arr = attr.array;
+
+	// Deterministic but structured input: different per plane so a kernel that
+	// ignored the plane index would be caught.
+	let seed = 12345;
+	const rnd = () => {
+		seed = ( seed * 1664525 + 1013904223 ) >>> 0;
+		return seed / 4294967296 * 2 - 1;
+	};
+
+	for ( let i = 0; i < planes * N * N; i ++ ) {
+
+		arr[ i * 2 + 0 ] = rnd();
+		arr[ i * 2 + 1 ] = rnd();
+
+	}
+
+	const input = arr.slice();
+	attr.needsUpdate = true;
+
+	fft.run( renderer, sign );
+
+	const buf = await renderer.getArrayBufferAsync( attr );
+	const gpu = new Float32Array( buf );
+
+	// Compare every plane.
+	let maxAbs = 0;
+	let maxRel = 0;
+	let refMag = 0;
+	const perPlane = [];
+
+	for ( let p = 0; p < planes; p ++ ) {
+
+		const off = p * N * N;
+		const re = new Float64Array( N * N );
+		const im = new Float64Array( N * N );
+		for ( let i = 0; i < N * N; i ++ ) { re[ i ] = input[ ( off + i ) * 2 ]; im[ i ] = input[ ( off + i ) * 2 + 1 ]; }
+
+		const ref = referenceDFT2D( re, im, N, sign );
+
+		let planeMax = 0;
+		for ( let i = 0; i < N * N; i ++ ) {
+
+			const dr = gpu[ ( off + i ) * 2 ] - ref.re[ i ];
+			const di = gpu[ ( off + i ) * 2 + 1 ] - ref.im[ i ];
+			const e = Math.hypot( dr, di );
+			const mag = Math.hypot( ref.re[ i ], ref.im[ i ] );
+			refMag = Math.max( refMag, mag );
+			planeMax = Math.max( planeMax, e );
+
+		}
+
+		perPlane.push( +planeMax.toFixed( 6 ) );
+		maxAbs = Math.max( maxAbs, planeMax );
+
+	}
+
+	maxRel = maxAbs / Math.max( 1e-9, refMag );
+
+	const result = {
+		N, planes, sign,
+		backend: window.__backend,
+		maxAbsError: +maxAbs.toFixed( 6 ),
+		maxRefMagnitude: +refMag.toFixed( 4 ),
+		maxRelError: +maxRel.toExponential( 3 ),
+		perPlaneMaxAbs: perPlane,
+		// float32 accumulation over N^2 terms; 1e-4 relative is generous but
+		// still four orders below anything a wrong transform would produce.
+		pass: maxRel < 1e-4,
+	};
+
+	log( JSON.stringify( result ) );
+
+	fft.dispose();
+
+	return result;
+
+};
+
+/**
+ * Hermitian symmetry of the generated spectrum, checked on the CPU.
+ *
+ * If h(-k) != conj(h(k)) the inverse transform is not real, and since two real
+ * fields share each complex transform, the error shows up as one field bleeding
+ * into the other rather than as obvious noise.
+ */
+window.__spectrumTest = ( N = 64 ) => {
+
+	const params = { windSpeed: 12, windAngle: 40, fetch: 120000 };
+	const results = [];
+
+	for ( const cascade of CASCADES ) {
+
+		const d = buildInitialSpectrum( cascade, N, params, 20250731 );
+
+		let maxErr = 0;
+		let maxMag = 0;
+
+		for ( let z = 0; z < N; z ++ ) {
+
+			for ( let x = 0; x < N; x ++ ) {
+
+				const i = ( z * N + x ) * 4;
+				const xm = ( N - x ) % N;
+				const zm = ( N - z ) % N;
+				const m = ( zm * N + xm ) * 4;
+
+				// stored conj-half at (x,z) must equal conj( h0 at (-k) )
+				maxErr = Math.max( maxErr,
+					Math.abs( d[ i + 2 ] - d[ m ] ),
+					Math.abs( d[ i + 3 ] + d[ m + 1 ] ) );
+				maxMag = Math.max( maxMag, Math.abs( d[ i ] ), Math.abs( d[ i + 1 ] ) );
+
+			}
+
+		}
+
+		results.push( { size: cascade.size, maxHermitianError: +maxErr.toExponential( 2 ), maxAmplitude: +maxMag.toExponential( 3 ) } );
+
+	}
+
+	const out = { N, cascades: results, pass: results.every( r => r.maxHermitianError === 0 || r.maxHermitianError < 1e-12 ) };
+	log( 'spectrum: ' + JSON.stringify( out ) );
+	return out;
+
+};
+
+/**
+ * End-to-end: evolve + inverse FFT, then read the height field back and check
+ * that its significant wave height matches what was asked for.
+ *
+ * This is what proves the whole chain — spectrum, packing, transform, sign
+ * convention, normalisation — agrees on what "wave height 2 m" means.
+ */
+window.__oceanTest = async ( N = 64, waveHeight = 2.0 ) => {
+
+	const params = { windSpeed: 12, windAngle: 40, fetch: 120000, waveHeight, waveChoppy: 1.0 };
+	const env = { params, u: {} };
+
+	const ocean = new SpectralOcean( renderer, env, N, 20250731 );
+	ocean.update( 3.0, params );
+
+	const buf = await renderer.getArrayBufferAsync( ocean.fft.a.value );
+	const data = new Float32Array( buf );
+
+	const C = CASCADES.length;
+	const amp = ocean.normalisation * waveHeight;
+
+	// field 0 real part is Dy; undo the centred-grid parity the pack kernel
+	// applies, then sum the variance across cascades.
+	let sumSq = 0;
+	let maxImagLeak = 0;
+
+	for ( let c = 0; c < C; c ++ ) {
+
+		const base = c * 3 * N * N;
+
+		for ( let z = 0; z < N; z ++ ) {
+
+			for ( let x = 0; x < N; x ++ ) {
+
+				const cell = base + z * N + x;
+				const sgn = ( x + z ) % 2 === 0 ? 1 : - 1;
+				const dy = data[ cell * 2 ] * amp * sgn;
+				sumSq += dy * dy;
+
+				// field 2 imaginary part is the divergence; a wildly out-of-range
+				// value would indicate the packing has gone wrong.
+				maxImagLeak = Math.max( maxImagLeak, Math.abs( data[ ( base + 2 * N * N + z * N + x ) * 2 + 1 ] * amp ) );
+
+			}
+
+		}
+
+	}
+
+	const rms = Math.sqrt( sumSq / ( N * N ) );
+	const hs = 4 * rms;
+
+	const out = {
+		N,
+		requestedWaveHeight: waveHeight,
+		measuredSignificantHeight: +hs.toFixed( 3 ),
+		ratio: +( hs / waveHeight ).toFixed( 3 ),
+		maxDivergenceMagnitude: +maxImagLeak.toFixed( 3 ),
+		normalisation: +ocean.normalisation.toExponential( 3 ),
+		// A spectral sea is random; the realised Hs of one finite grid will not
+		// land exactly on the target. Within a factor of two either way means the
+		// whole chain agrees on units and scale.
+		pass: hs / waveHeight > 0.5 && hs / waveHeight < 2.0 && Number.isFinite( hs ),
+	};
+
+	log( 'ocean: ' + JSON.stringify( out ) );
+
+	ocean.dispose();
+	return out;
+
+};
+
+log( 'ready' );
+window.__ready = true;
+</script>
+</body>
+</html>

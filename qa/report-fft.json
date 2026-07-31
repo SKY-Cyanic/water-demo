@@ -1,0 +1,111 @@
+{
+	"command": "fft",
+	"origin": "http://localhost:8173",
+	"startedAt": "2026-07-31T07:10:41.177Z",
+	"userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+	"fft": [
+		{
+			"N": 8,
+			"planes": 1,
+			"sign": 1,
+			"backend": "WebGPU",
+			"maxAbsError": 0.000001,
+			"maxRefMagnitude": 15.1118,
+			"maxRelError": 8.296e-8,
+			"perPlaneMaxAbs": [
+				0.000001
+			],
+			"pass": true
+		},
+		{
+			"N": 16,
+			"planes": 3,
+			"sign": 1,
+			"backend": "WebGPU",
+			"maxAbsError": 0.000005,
+			"maxRefMagnitude": 34.1569,
+			"maxRelError": 1.559e-7,
+			"perPlaneMaxAbs": [
+				0.000005,
+				0.000005,
+				0.000005
+			],
+			"pass": true
+		},
+		{
+			"N": 16,
+			"planes": 3,
+			"sign": -1,
+			"backend": "WebGPU",
+			"maxAbsError": 0.000007,
+			"maxRefMagnitude": 34.1569,
+			"maxRelError": 2.096e-7,
+			"perPlaneMaxAbs": [
+				0.000007,
+				0.000006,
+				0.000005
+			],
+			"pass": true
+		},
+		{
+			"N": 64,
+			"planes": 2,
+			"sign": 1,
+			"backend": "WebGPU",
+			"maxAbsError": 0.000047,
+			"maxRefMagnitude": 158.3126,
+			"maxRelError": 2.965e-7,
+			"perPlaneMaxAbs": [
+				0.000047,
+				0.000047
+			],
+			"pass": true
+		},
+		{
+			"N": 256,
+			"planes": 1,
+			"sign": 1,
+			"backend": "WebGPU",
+			"maxAbsError": 0.000284,
+			"maxRefMagnitude": 710.4526,
+			"maxRelError": 3.997e-7,
+			"perPlaneMaxAbs": [
+				0.000284
+			],
+			"pass": true
+		}
+	],
+	"spectrum": {
+		"N": 64,
+		"cascades": [
+			{
+				"size": 512,
+				"maxHermitianError": 0,
+				"maxAmplitude": 0.08243
+			},
+			{
+				"size": 96,
+				"maxHermitianError": 0,
+				"maxAmplitude": 0.4368
+			},
+			{
+				"size": 18,
+				"maxHermitianError": 0,
+				"maxAmplitude": 0.134
+			}
+		],
+		"pass": true
+	},
+	"ocean": {
+		"N": 64,
+		"requestedWaveHeight": 2,
+		"measuredSignificantHeight": 1.951,
+		"ratio": 0.976,
+		"maxDivergenceMagnitude": 0.502,
+		"normalisation": 0.1942,
+		"pass": true
+	},
+	"fftAllPass": true,
+	"finishedAt": "2026-07-31T07:10:42.286Z",
+	"ok": true
+}

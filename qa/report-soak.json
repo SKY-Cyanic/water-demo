@@ -1,0 +1,139 @@
+{
+	"command": "soak",
+	"origin": "http://localhost:8173",
+	"startedAt": "2026-07-31T06:12:24.381Z",
+	"userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+	"soak": {
+		"minutes": 5,
+		"samples": [
+			{
+				"t": 0,
+				"heap": 17946684,
+				"fps": 59.9,
+				"errors": 0
+			},
+			{
+				"t": 15,
+				"heap": 18050828,
+				"fps": 60.2,
+				"errors": 0
+			},
+			{
+				"t": 30,
+				"heap": 18478214,
+				"fps": 60.1,
+				"errors": 0
+			},
+			{
+				"t": 45,
+				"heap": 19462415,
+				"fps": 59.9,
+				"errors": 0
+			},
+			{
+				"t": 60,
+				"heap": 19732608,
+				"fps": 60,
+				"errors": 0
+			},
+			{
+				"t": 75,
+				"heap": 19280798,
+				"fps": 60,
+				"errors": 0
+			},
+			{
+				"t": 90,
+				"heap": 18865132,
+				"fps": 60,
+				"errors": 0
+			},
+			{
+				"t": 105,
+				"heap": 19475852,
+				"fps": 60,
+				"errors": 0
+			},
+			{
+				"t": 120,
+				"heap": 19491102,
+				"fps": 60,
+				"errors": 0
+			},
+			{
+				"t": 135,
+				"heap": 19045693,
+				"fps": 60,
+				"errors": 0
+			},
+			{
+				"t": 150,
+				"heap": 18740780,
+				"fps": 60,
+				"errors": 0
+			},
+			{
+				"t": 165,
+				"heap": 19644569,
+				"fps": 60,
+				"errors": 0
+			},
+			{
+				"t": 180,
+				"heap": 19061397,
+				"fps": 60,
+				"errors": 0
+			},
+			{
+				"t": 195,
+				"heap": 19338272,
+				"fps": 60.1,
+				"errors": 0
+			},
+			{
+				"t": 210,
+				"heap": 19776368,
+				"fps": 60,
+				"errors": 0
+			},
+			{
+				"t": 225,
+				"heap": 19255715,
+				"fps": 60,
+				"errors": 0
+			},
+			{
+				"t": 240,
+				"heap": 19084659,
+				"fps": 59.9,
+				"errors": 0
+			},
+			{
+				"t": 255,
+				"heap": 18799021,
+				"fps": 59.9,
+				"errors": 0
+			},
+			{
+				"t": 270,
+				"heap": 19227729,
+				"fps": 59.9,
+				"errors": 0
+			},
+			{
+				"t": 285,
+				"heap": 19603341,
+				"fps": 59.9,
+				"errors": 0
+			}
+		],
+		"startMB": 17.12,
+		"endMB": 18.7,
+		"peakMB": 18.86,
+		"growthMB": 1.58,
+		"consoleErrors": [],
+		"pageErrors": []
+	},
+	"finishedAt": "2026-07-31T06:17:30.231Z",
+	"ok": true
+}

@@ -1,0 +1,96 @@
+{
+	"command": "stress",
+	"origin": "http://localhost:8173",
+	"startedAt": "2026-07-31T06:03:24.495Z",
+	"userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+	"stress": {
+		"resize": {
+			"backend": "WebGPU",
+			"quality": "high",
+			"preset": "open-sea",
+			"fps": 59.9,
+			"frameMs": 16.71,
+			"onePercentLow": 53.5,
+			"viewport": "1600x900",
+			"devicePixelRatio": 1,
+			"triangles": 345827,
+			"cameraY": 4.5,
+			"surfaceY": 0.17,
+			"underwater": 0,
+			"consoleErrors": 0,
+			"errors": []
+		},
+		"resizeErrors": [],
+		"presetSwitch": [
+			{
+				"id": "calm-lagoon",
+				"worstFrameMs": 30.5
+			},
+			{
+				"id": "open-sea",
+				"worstFrameMs": 19.3
+			},
+			{
+				"id": "golden-hour",
+				"worstFrameMs": 19.4
+			},
+			{
+				"id": "storm-front",
+				"worstFrameMs": 19.7
+			},
+			{
+				"id": "moonlit",
+				"worstFrameMs": 19.3
+			},
+			{
+				"id": "open-sea",
+				"worstFrameMs": 19.2
+			}
+		],
+		"mediumCrossing": {
+			"flips": [
+				{
+					"i": 0,
+					"y": -1,
+					"to": true
+				},
+				{
+					"i": 84,
+					"y": 0.68,
+					"to": false
+				},
+				{
+					"i": 358,
+					"y": -0.16,
+					"to": true
+				}
+			],
+			"flipCount": 3
+		},
+		"afterHidden": {
+			"backend": "WebGPU",
+			"quality": "high",
+			"preset": "open-sea",
+			"fps": 59.6,
+			"frameMs": 16.77,
+			"onePercentLow": 53.5,
+			"viewport": "1920x1080",
+			"devicePixelRatio": 0.9,
+			"triangles": 343619,
+			"cameraY": -0.98,
+			"surfaceY": 0.06,
+			"underwater": 0.999999999994709,
+			"consoleErrors": 0,
+			"errors": []
+		},
+		"memory": {
+			"startBytes": 20563476,
+			"endBytes": 18841340,
+			"deltaBytes": -1722136
+		},
+		"consoleErrors": [],
+		"pageErrors": []
+	},
+	"finishedAt": "2026-07-31T06:04:05.222Z",
+	"ok": true
+}

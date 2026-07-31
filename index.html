@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<!--
+	Procedural Ocean — real-time WebGPU/WebGL2 ocean demo
+	=====================================================
+
+	Independent implementation. No code, shaders, textures, models, tuning values,
+	brand assets or UI layouts were taken from any commercial ocean demo product.
+	Everything here is written from published, general rendering techniques:
+
+	  - Gerstner (trochoidal) wave summation with deep-water dispersion w = sqrt(g*k)
+	  - Schlick's Fresnel approximation
+	  - Beer-Lambert absorption
+	  - Jacobian / slope based crest detection for foam
+	  - Temporal ping-pong accumulation for foam persistence
+	  - Analytic atmospheric gradient with Mie-style forward scattering
+	  - Procedural Worley-noise caustics
+
+	Third-party code
+	----------------
+	Three.js r185 (0.185.1) — MIT License — https://github.com/mrdoob/three.js
+	Vendored unmodified under ./vendor/three-0.185.1/ (see LICENSE in that folder).
+	Source: https://cdn.jsdelivr.net/npm/three@0.185.1/
+
+	No other third-party code is used. No runtime asset (image, model, HDRI, font)
+	is fetched — every texture and environment in this demo is generated procedurally.
+
+	Run with a local HTTP server (ES modules + WebGPU do not work over file://):
+	    node serve.mjs      →  http://localhost:8173/
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Procedural Ocean — WebGPU</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>🌊</text></svg>">
+<link rel="stylesheet" href="./src/style.css">
+
+<!--
+	Vendored locally so the verification loop never depends on network state.
+	The equivalent pinned-CDN import map is:
+
+	{ "imports": {
+	    "three":        "https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.webgpu.js",
+	    "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.webgpu.js",
+	    "three/tsl":    "https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.tsl.js"
+	} }
+
+	Note: three.tsl.js itself does `import { TSL } from 'three/webgpu'`,
+	so the "three/webgpu" entry is required, not optional.
+-->
+<script type="importmap">
+{
+	"imports": {
+		"three": "./vendor/three-0.185.1/three.webgpu.js",
+		"three/webgpu": "./vendor/three-0.185.1/three.webgpu.js",
+		"three/tsl": "./vendor/three-0.185.1/three.tsl.js"
+	}
+}
+</script>
+</head>
+<body>
+
+<div id="stage">
+	<canvas id="view"></canvas>
+</div>
+
+<!-- Boot / loading state -->
+<div id="boot" class="overlay" role="status" aria-live="polite">
+	<div class="boot-card">
+		<div class="boot-mark"><span></span><span></span><span></span></div>
+		<h1>Procedural Ocean</h1>
+		<p id="boot-step">Checking graphics capability…</p>
+	</div>
+</div>
+
+<!-- Fatal error state -->
+<div id="fatal" class="overlay" hidden role="alert">
+	<div class="fatal-card">
+		<h2 id="fatal-title">Could not start</h2>
+		<p id="fatal-message"></p>
+		<pre id="fatal-detail"></pre>
+		<div class="fatal-actions">
+			<button type="button" id="fatal-retry">Reload</button>
+			<button type="button" id="fatal-fallback">Retry with WebGL 2</button>
+		</div>
+	</div>
+</div>
+
+<!-- First-run hint, auto-dismisses -->
+<div id="hint" class="hint" hidden>
+	<strong>Drag</strong> to look &nbsp;·&nbsp; <strong>W A S D</strong> move &nbsp;·&nbsp;
+	<strong>Q / E</strong> down / up &nbsp;·&nbsp; <strong>Wheel</strong> speed &nbsp;·&nbsp;
+	<strong>H</strong> panel &nbsp;·&nbsp; <strong>P</strong> pause &nbsp;·&nbsp;
+	<strong>R</strong> reset &nbsp;·&nbsp; <strong>F</strong> stats
+	<span class="hint-note">Dive below the surface to see the underwater view.</span>
+</div>
+
+<!-- Diagnostics HUD -->
+<div id="hud" class="hud" hidden>
+	<div class="hud-row"><span class="hud-k">FPS</span><span class="hud-v" id="hud-fps">–</span></div>
+	<div class="hud-row"><span class="hud-k">frame</span><span class="hud-v" id="hud-ms">–</span></div>
+	<div class="hud-row"><span class="hud-k">1% low</span><span class="hud-v" id="hud-low">–</span></div>
+	<div class="hud-row"><span class="hud-k">backend</span><span class="hud-v" id="hud-backend">–</span></div>
+	<div class="hud-row"><span class="hud-k">quality</span><span class="hud-v" id="hud-quality">–</span></div>
+	<div class="hud-row"><span class="hud-k">scale</span><span class="hud-v" id="hud-scale">–</span></div>
+	<div class="hud-row"><span class="hud-k">tris</span><span class="hud-v" id="hud-tris">–</span></div>
+</div>
+
+<!-- Settings panel (populated by src/ui/panel.js) -->
+<aside id="panel" class="panel" hidden>
+	<header class="panel-head">
+		<h2>Ocean</h2>
+		<button type="button" id="panel-toggle" title="Hide panel (H)" aria-label="Hide panel">–</button>
+	</header>
+	<div class="panel-body" id="panel-body"></div>
+	<footer class="panel-foot">
+		<span id="panel-status">–</span>
+	</footer>
+</aside>
+
+<button type="button" id="panel-show" class="panel-show" hidden title="Show panel (H)">Settings</button>
+
+<div id="toast" class="toast" hidden></div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

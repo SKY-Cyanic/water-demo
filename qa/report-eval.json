@@ -1,0 +1,13 @@
+{
+	"command": "eval",
+	"origin": "http://localhost:8173/?forcewebgl=1",
+	"startedAt": "2026-07-31T07:07:37.651Z",
+	"userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+	"result": {
+		"bloom": false,
+		"backend": "WebGL 2",
+		"errs": []
+	},
+	"finishedAt": "2026-07-31T07:07:38.310Z",
+	"ok": true
+}
