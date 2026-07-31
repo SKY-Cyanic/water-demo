@@ -20,12 +20,12 @@
 // the difference between a boat and a cork.
 
 import {
-	BoxGeometry, BufferAttribute, BufferGeometry, CylinderGeometry, Mesh,
+	BoxGeometry, BufferAttribute, BufferGeometry, CylinderGeometry, DoubleSide, Mesh,
 	MeshBasicNodeMaterial,
 } from 'three/webgpu';
 import {
-	Fn, attribute, cameraPosition, cross, dot, float, max, mix, normalLocal, normalize,
-	positionGeometry, pow, saturate, smoothstep, texture, varyingProperty, vec2, vec3, vec4,
+	Fn, attribute, cross, dot, faceDirection, float, max, mix, normalLocal, normalize,
+	positionGeometry, saturate, smoothstep, texture, varyingProperty, vec2, vec3, vec4,
 } from 'three/tsl';
 
 /* ------------------------------------------------------------------ shapes */
@@ -34,6 +34,9 @@ const LENGTH_AFT = 7.0;
 const LENGTH_FWD = 8.0;
 const BEAM = 4.4;
 const DRAFT = 2.05;
+
+/** How far the finished hull is dropped so she floats on her lines. */
+const SINK = 1.35;
 
 /** Half-beam at parametric station t, 0 = transom, 1 = stem. */
 function halfBeam( t ) {
@@ -48,7 +51,7 @@ function halfBeam( t ) {
 function sheer( t ) {
 
 	const s = t * 2 - 1;
-	return 1.02 + 0.62 * s * s + 0.18 * s * s * s;
+	return 1.85 + 0.85 * s * s + 0.25 * s * s * s;
 
 }
 
@@ -74,12 +77,13 @@ class Builder {
 		this.pos = [];
 		this.nrm = [];
 		this.col = [];
+		this.cvs = [];
 		this.idx = [];
 
 	}
 
 	/** @param {number[]} colour linear RGB */
-	add( geometry, colour ) {
+	add( geometry, colour, translucent = 0 ) {
 
 		const base = this.pos.length / 3;
 		const p = geometry.attributes.position.array;
@@ -87,7 +91,12 @@ class Builder {
 
 		for ( let i = 0; i < p.length; i ++ ) this.pos.push( p[ i ] );
 		for ( let i = 0; i < n.length; i ++ ) this.nrm.push( n[ i ] );
-		for ( let i = 0; i < p.length / 3; i ++ ) this.col.push( colour[ 0 ], colour[ 1 ], colour[ 2 ] );
+		for ( let i = 0; i < p.length / 3; i ++ ) {
+
+			this.col.push( colour[ 0 ], colour[ 1 ], colour[ 2 ] );
+			this.cvs.push( translucent );
+
+		}
 
 		const index = geometry.index.array;
 		for ( let i = 0; i < index.length; i ++ ) this.idx.push( index[ i ] + base );
@@ -102,6 +111,7 @@ class Builder {
 		g.setAttribute( 'position', new BufferAttribute( new Float32Array( this.pos ), 3 ) );
 		g.setAttribute( 'normal', new BufferAttribute( new Float32Array( this.nrm ), 3 ) );
 		g.setAttribute( 'paint', new BufferAttribute( new Float32Array( this.col ), 3 ) );
+		g.setAttribute( 'canvas', new BufferAttribute( new Float32Array( this.cvs ), 1 ) );
 		g.setIndex( this.idx );
 		return g;
 
@@ -170,16 +180,31 @@ function buildGeometry() {
 
 	};
 
-	// Bottom: |s| in [0, BOOT].
-	const BOOT = 0.90;
+	// The boot top is a *height*, a little above the waterline, so it has to be
+	// solved per station rather than fixed at a section parameter. Splitting at a
+	// constant |s| put it 1.2 m above the water amidships and painted the entire
+	// topside dark — the boat looked like it was sinking.
+	const BOOT_Y = 0.22;
 
-	b.add( loft( 30, 18, ( t, v ) => section( t, ( v * 2 - 1 ) * BOOT ) ), [ 0.045, 0.070, 0.080 ] );
+	const bootAt = ( t ) => {
 
-	// Topsides: the two flanks above the boot top, port and starboard.
+		const kd = keel( t );
+		return Math.min( 0.97, Math.pow( Math.max( 0, ( BOOT_Y + SINK + kd ) / ( sheer( t ) + kd ) ), 1 / 1.75 ) );
+
+	};
+
+	// Bottom: keel up to the boot top.
+	b.add( loft( 30, 18, ( t, v ) => section( t, ( v * 2 - 1 ) * bootAt( t ) ) ), [ 0.030, 0.048, 0.062 ] );
+
+	// Topsides: the two flanks above it.
 	for ( const sign of [ - 1, 1 ] ) {
 
-		b.add( loft( 30, 3, ( t, v ) => section( t, sign * ( BOOT + v * ( 1 - BOOT ) ) ) ),
-			[ 0.68, 0.66, 0.60 ] );
+		b.add( loft( 30, 4, ( t, v ) => {
+
+			const a = bootAt( t );
+			return section( t, sign * ( a + v * ( 1 - a ) ) );
+
+		} ), [ 0.55, 0.56, 0.54 ] );
 
 	}
 
@@ -197,12 +222,12 @@ function buildGeometry() {
 	} ), [ 0.30, 0.21, 0.125 ] );
 
 	// --- cabin
-	const cabin = new BoxGeometry( 2.5, 1.15, 3.6 );
-	cabin.translate( 0, sheer( 0.42 ) + 0.62, - 1.1 );
-	b.add( cabin, [ 0.52, 0.50, 0.47 ] );
+	const cabin = new BoxGeometry( 2.05, 0.95, 3.2 );
+	cabin.translate( 0, sheer( 0.42 ) + 0.52, - 1.1 );
+	b.add( cabin, [ 0.30, 0.30, 0.29 ] );
 
-	const roof = new BoxGeometry( 2.7, 0.14, 3.8 );
-	roof.translate( 0, sheer( 0.42 ) + 1.24, - 1.1 );
+	const roof = new BoxGeometry( 2.25, 0.12, 3.4 );
+	roof.translate( 0, sheer( 0.42 ) + 1.04, - 1.1 );
 	b.add( roof, [ 0.20, 0.19, 0.185 ] );
 
 	// --- mast, boom, bowsprit
@@ -217,9 +242,9 @@ function buildGeometry() {
 	boom.translate( 0, deckY + 1.45, - 1.4 );
 	b.add( boom, [ 0.42, 0.32, 0.20 ] );
 
-	const sprit = new CylinderGeometry( 0.055, 0.085, 3.4, 8 );
+	const sprit = new CylinderGeometry( 0.05, 0.075, 2.8, 8 );
 	sprit.rotateX( Math.PI / 2.32 );
-	sprit.translate( 0, sheer( 1 ) + 0.55, LENGTH_FWD + 1.15 );
+	sprit.translate( 0, sheer( 0.985 ) - 0.15, LENGTH_FWD + 0.55 );
 	b.add( sprit, [ 0.42, 0.32, 0.20 ] );
 
 	// --- mainsail: a cambered quad from the mast to the boom end. The belly is
@@ -235,7 +260,7 @@ function buildGeometry() {
 
 		return [ belly, luffY - v * 0.30, z ];
 
-	} ), [ 0.80, 0.78, 0.72 ] );
+	} ), [ 0.80, 0.78, 0.72 ], 1 );
 
 	// --- jib
 	b.add( loft( 8, 8, ( t, v ) => {
@@ -257,7 +282,7 @@ function buildGeometry() {
 			lz + ( clew[ 2 ] - lz ) * v,
 		];
 
-	} ), [ 0.78, 0.76, 0.71 ] );
+	} ), [ 0.78, 0.76, 0.71 ], 1 );
 
 	const g = b.build();
 
@@ -267,7 +292,7 @@ function buildGeometry() {
 	// the underbody. Sitting deeper puts the mismatch below the waterline, where
 	// it is invisible, which is cheaper and steadier than any amount of extra
 	// sampling.
-	g.translate( 0, - 0.55, 0 );
+	g.translate( 0, - SINK, 0 );
 	return g;
 
 }
@@ -319,11 +344,14 @@ export class Vessel {
 
 		const material = new MeshBasicNodeMaterial();
 		material.name = 'Vessel';
+		// The sails are single sheets and the hull shell is open at the deck, so
+		// backfaces are visible from ordinary viewpoints.
+		material.side = DoubleSide;
 
 		const vNormal = varyingProperty( 'vec3', 'vVesNormal' );
 		const vPaint = varyingProperty( 'vec3', 'vVesPaint' );
 		const vLocalY = varyingProperty( 'float', 'vVesLocalY' );
-		const vWorld = varyingProperty( 'vec3', 'vVesWorld' );
+		const vTranslucent = varyingProperty( 'float', 'vVesTranslucent' );
 
 		material.positionNode = Fn( () => {
 
@@ -369,9 +397,26 @@ export class Vessel {
 				// rig stay rigid, which is what carries the boat's pitch and roll. It
 				// bends the hull by a few centimetres in exchange for a waterline that
 				// is correct everywhere, and the bend is under water.
-				const here = texture( spectral.disp[ 0 ], world.xz.div( spectral.sizes[ 0 ] ), float( 0 ) ).y;
+				// Sample every cascade, not just the swell: the waterline has to match
+				// the surface the eye sees, and the chop cascades are a third of a
+				// metre of it. (The *rigid* placement above still uses cascade 0
+				// alone — that is about how a hull responds, which is a different
+				// question from where the water is.)
+				const wxz = world.xz.toVar( 'vesWXZ' );
+				const here = float( 0 ).toVar( 'vesWaterY' );
+
+				for ( let c = 0; c < spectral.sizes.length; c ++ ) {
+
+					here.addAssign( texture( spectral.disp[ c ], wxz.div( spectral.sizes[ c ] ), float( 0 ) ).y );
+
+				}
+
 				const sink = smoothstep( 0.80, - 0.05, p.y ).toVar( 'vesSink' );
-				world.y.assign( mix( world.y, here.add( p.y ), sink ) );
+
+				// Assigning through a swizzle — world.y.assign(...) — compiles without
+				// complaint and does nothing. The hull kept its rigid height and hung
+				// above the water exactly as before the conform was written.
+				world.assign( vec3( world.x, mix( world.y, here.add( p.y ), sink ), world.z ) );
 
 			}
 
@@ -379,8 +424,8 @@ export class Vessel {
 				tangent.mul( normalLocal.x ).add( normal.mul( normalLocal.y ) ).add( bitangent.mul( normalLocal.z ) )
 			) );
 			vPaint.assign( attribute( 'paint', 'vec3' ) );
+			vTranslucent.assign( attribute( 'canvas', 'float' ) );
 			vLocalY.assign( p.y );
-			vWorld.assign( world );
 
 			return world;
 
@@ -388,33 +433,51 @@ export class Vessel {
 
 		material.colorNode = Fn( () => {
 
-			const n = normalize( vNormal ).toVar( 'vesNorm' );
-			const nDotL = saturate( dot( n, u.sunDir ) ).toVar( 'vesNdL' );
-
-			const skyLight = mix( u.skyHorizon, u.skyZenith, 0.42 ).toVar( 'vesSky' );
-			const ambient = u.sunIntensity.mul( 0.50 ).add( 0.40 ).toVar( 'vesAmb' );
+			// Sails and the thin parts of the rig are single-sided sheets, so the
+			// normal is only right for one of the two faces. Taking the side facing
+			// the eye, rather than the one the winding order happens to give, is
+			// what stops a sail from going black the moment you walk around it.
+			const n = normalize( vNormal ).mul( faceDirection ).toVar( 'vesNorm' );
 
 			const paint = vPaint.toVar( 'vesPaint' );
 
-			// Anything below the waterline is seen through the water column, so it
-			// takes the water's colour rather than its own.
-			const submerged = smoothstep( 0.10, - 0.45, vLocalY ).toVar( 'vesSub' );
-			paint.assign( mix( paint, paint.mul( u.waterShallow ).mul( 2.0 ), submerged ) );
+			// Anything below the waterline is seen through the water column.
+			const submerged = smoothstep( 0.10, - 0.55, vLocalY ).toVar( 'vesSub' );
+			paint.assign( mix( paint, paint.mul( u.waterShallow ).mul( 1.9 ), submerged ) );
 
-			// A hull sits in a bowl of reflected light. Skylight from above, plus a
-			// weaker bounce from the water below, which is what stops the underside
-			// of the sheer and the boom from going flat black.
-			const up = saturate( n.y ).toVar( 'vesUp' );
-			const down = saturate( n.y.negate() ).toVar( 'vesDown' );
+			const skyLight = mix( u.skyHorizon, u.skyZenith, 0.42 ).toVar( 'vesSky' );
 
-			const V = normalize( cameraPosition.sub( vWorld ) ).toVar( 'vesV' );
-			const rim = pow( saturate( float( 1 ).sub( saturate( dot( n, V ) ) ) ), 3.0 ).mul( 0.30 );
+			// Direct sun, hard. The previous version wrapped this into a broad
+			// ambient and then added an unmodulated sky-coloured rim on top, which
+			// meant every surface — hull, deck, sail, cabin — converged on the same
+			// mid grey-blue and the boat rendered as a flat cut-out. Contrast
+			// between faces is the entire read of a shape this simple.
+			// Half-Lambert. A terminator that reaches zero turns any face pointing
+			// away from a 34-degree sun into a black hole — the deck did exactly
+			// that — and it makes the shading hostage to whether each lofted patch
+			// happened to come out wound the right way.
+			const sun = saturate( dot( n, u.sunDir ).mul( 0.5 ).add( 0.5 ) ).toVar( 'vesSun' );
+			const sunSq = sun.mul( sun ).toVar( 'vesSunSq' );
+
+			// Hemisphere ambient: sky from above, water bounce from below. This is
+			// the term that keeps the shaded side from going black, and because it
+			// varies with the normal it still describes the form.
+			const hemi = mix(
+				u.waterShallow.mul( 0.55 ),
+				skyLight,
+				saturate( n.y.mul( 0.5 ).add( 0.5 ) )
+			).mul( u.sunIntensity.mul( 0.35 ).add( 0.30 ) ).toVar( 'vesHemi' );
 
 			const lit = paint.mul(
-				u.sunColor.mul( nDotL.mul( u.sunIntensity ).mul( 1.05 ) )
-					.add( skyLight.mul( ambient.mul( 0.55 ).mul( up.mul( 0.7 ).add( 0.3 ) ) ) )
-					.add( u.waterShallow.mul( ambient.mul( 0.30 ).mul( down ) ) )
-			).add( skyLight.mul( rim ) );
+				u.sunColor.mul( sunSq.mul( u.sunIntensity ).mul( 1.30 ) ).add( hemi )
+			).toVar( 'vesLit' );
+
+			// Sails are thin and translucent: backlit, they glow rather than fall
+			// into silhouette. Without this the leeward side of every sail is a flat
+			// dark shape, which is the single most obvious way canvas reads as sheet
+			// metal.
+			const through = saturate( dot( n.negate(), u.sunDir ) ).mul( vTranslucent );
+			lit.addAssign( paint.mul( u.sunColor ).mul( through.mul( u.sunIntensity ).mul( 0.85 ) ) );
 
 			return vec4( max( lit, vec3( 0.0 ) ), 1.0 );
 

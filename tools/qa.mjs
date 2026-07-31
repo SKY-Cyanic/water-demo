@@ -295,6 +295,14 @@ const VIEWS = {
 	hero: { y: 5.5, yaw: Math.PI * 1.18, pitch: - 0.055 },
 	// Framed on the moored vessel.
 	vessel: { y: 4.2, yaw: Math.PI * 1.18, pitch: - 0.045 },
+	// Close inspection of the vessel from every side. A hero object cannot be
+	// signed off from one angle: the angle you happen to pick is the one you
+	// tuned it for.
+	boatSide: { x: 19.64, z: 30.46, y: 3.0, yaw: 0.5708, pitch: - 0.1120 },
+	boatLow: { x: 3.98, z: 6.06, y: 1.6, yaw: - 2.5708, pitch: - 0.0308 },
+	boatBow: { x: - 1.62, z: 25.10, y: 3.5, yaw: - 1.0000, pitch: - 0.1521 },
+	boatStern: { x: 26.80, z: 17.55, y: 5.0, yaw: 1.5360, pitch: - 0.2359 },
+	boatTop: { x: 15.86, z: 24.57, y: 9.0, yaw: 0.5708, pitch: - 0.7141 },
 	low: { y: 2.2, yaw: Math.PI * 1.05, pitch: - 0.02 },
 	// Angled down enough that the bottom is actually in frame.
 	lagoon: { y: 3.4, yaw: Math.PI * 1.05, pitch: - 0.22 },
@@ -311,7 +319,7 @@ function setState( { preset, view = 'hero', quality } = {} ) {
 	const v = VIEWS[ view ];
 	const patch = {
 		instant: true,
-		camera: { x: 0, z: 0, y: v.y, yaw: v.yaw, pitch: v.pitch },
+		camera: { x: v.x ?? 0, z: v.z ?? 0, y: v.y, yaw: v.yaw, pitch: v.pitch },
 	};
 	if ( preset ) patch.preset = preset;
 	if ( quality ) patch.quality = quality;
@@ -354,6 +362,11 @@ async function shots( chrome ) {
 		[ 'dusk', 'qa-dusk.png', 'sunward' ],
 		[ 'sea-fog', 'qa-sea-fog.png', 'hero' ],
 		[ 'open-sea', 'qa-vessel.png', 'vessel' ],
+		[ 'open-sea', 'qa-boat-side.png', 'boatSide' ],
+		[ 'open-sea', 'qa-boat-low.png', 'boatLow' ],
+		[ 'open-sea', 'qa-boat-bow.png', 'boatBow' ],
+		[ 'open-sea', 'qa-boat-stern.png', 'boatStern' ],
+		[ 'open-sea', 'qa-boat-top.png', 'boatTop' ],
 	];
 
 	for ( const [ preset, file, view ] of presets ) {
