@@ -1,7 +1,7 @@
 {
 	"command": "perf",
 	"origin": "http://localhost:8173",
-	"startedAt": "2026-08-01T02:30:16.485Z",
+	"startedAt": "2026-08-01T02:41:47.760Z",
 	"userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
 	"perf": [
 		{
@@ -16,12 +16,12 @@
 			"preset": "open-sea",
 			"underwater": false,
 			"label": "1920x1080 high",
-			"seconds": 10,
-			"frames": 600,
+			"seconds": 8,
+			"frames": 480,
 			"avgFps": 60,
 			"avgMs": 16.67,
 			"medianMs": 16.7,
-			"p95Ms": 17.4,
+			"p95Ms": 17.6,
 			"onePercentLowFps": 56.5,
 			"worstMs": 17.7
 		},
@@ -37,8 +37,8 @@
 			"preset": "open-sea",
 			"underwater": false,
 			"label": "1280x720 high",
-			"seconds": 10,
-			"frames": 600,
+			"seconds": 8,
+			"frames": 480,
 			"avgFps": 60,
 			"avgMs": 16.67,
 			"medianMs": 16.7,
@@ -58,14 +58,14 @@
 			"preset": "storm-front",
 			"underwater": false,
 			"label": "1920x1080 high storm",
-			"seconds": 10,
-			"frames": 600,
+			"seconds": 8,
+			"frames": 480,
 			"avgFps": 60,
 			"avgMs": 16.67,
 			"medianMs": 16.7,
-			"p95Ms": 17.5,
+			"p95Ms": 17.1,
 			"onePercentLowFps": 56.8,
-			"worstMs": 17.7
+			"worstMs": 17.8
 		},
 		{
 			"backend": "WebGPU",
@@ -79,13 +79,13 @@
 			"preset": "storm-front",
 			"underwater": false,
 			"label": "1920x1080 low storm",
-			"seconds": 10,
-			"frames": 600,
+			"seconds": 8,
+			"frames": 480,
 			"avgFps": 60,
 			"avgMs": 16.67,
 			"medianMs": 16.7,
-			"p95Ms": 17.5,
-			"onePercentLowFps": 56.5,
+			"p95Ms": 17.4,
+			"onePercentLowFps": 56.8,
 			"worstMs": 17.7
 		},
 		{
@@ -100,13 +100,13 @@
 			"preset": "open-sea",
 			"underwater": false,
 			"label": "3840x2160 ultra (headroom probe)",
-			"seconds": 10,
-			"frames": 188,
-			"avgFps": 18.9,
-			"avgMs": 52.92,
-			"medianMs": 50,
-			"p95Ms": 66.7,
-			"onePercentLowFps": 14.8,
+			"seconds": 8,
+			"frames": 135,
+			"avgFps": 16.9,
+			"avgMs": 59.26,
+			"medianMs": 66.6,
+			"p95Ms": 66.8,
+			"onePercentLowFps": 14.9,
 			"worstMs": 83.4
 		},
 		{
@@ -121,16 +121,16 @@
 			"preset": "calm-lagoon",
 			"underwater": true,
 			"label": "1920x1080 high underwater",
-			"seconds": 10,
-			"frames": 600,
-			"avgFps": 60,
-			"avgMs": 16.67,
+			"seconds": 8,
+			"frames": 430,
+			"avgFps": 53.9,
+			"avgMs": 18.57,
 			"medianMs": 16.7,
-			"p95Ms": 17.6,
-			"onePercentLowFps": 56.5,
-			"worstMs": 17.7
+			"p95Ms": 33.3,
+			"onePercentLowFps": 29.9,
+			"worstMs": 34.3
 		}
 	],
-	"finishedAt": "2026-08-01T02:31:43.177Z",
+	"finishedAt": "2026-08-01T02:43:02.470Z",
 	"ok": true
 }

@@ -377,7 +377,7 @@ export function syncUniforms( env, dt = 0 ) {
 		// range into something a threshold can use: 3 m/s barely moves it, 9.5 m/s
 		// takes about a fifth off, 21 m/s takes nearly half.
 		const f = Math.min( 1, Math.sqrt( W / 0.05 ) );
-		u.foamThreshold.value = p.foamThreshold * ( 1 - 0.45 * f );
+		u.foamThreshold.value = p.foamThreshold * ( 1 - 0.28 * f );
 
 	}
 	u.foamSharpness.value = p.foamSharpness;

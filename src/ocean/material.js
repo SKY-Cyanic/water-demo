@@ -19,7 +19,7 @@
 
 import { DoubleSide, FrontSide, Mesh, MeshBasicNodeMaterial } from 'three/webgpu';
 import {
-	Fn, If, abs, cameraPosition, dFdx, dFdy, dot, exp, faceDirection, float, length, max, min, mix,
+	Fn, If, abs, cameraPosition, dFdx, dFdy, dot, exp, faceDirection, float, fwidth, length, max, min, mix,
 	mx_fractal_noise_float, normalize, oneMinus, positionGeometry, positionWorld, pow, reflect,
 	refract, saturate, screenUV, smoothstep, step, texture, varyingProperty, vec2, vec3,
 } from 'three/tsl';
@@ -585,7 +585,13 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 			// river down the arms because the amount fed straight past the foam
 			// mask's upper threshold and saturated — everything above 0.70 looks
 			// identical, so the whole trail flattened into one shape with no edge.
-			const decay = exp( astern.mul( - 0.045 ) ).mul( smoothstep( 0.0, 3.0, astern ) );
+			// A wake dissipates. The old length scale left a hard white line running
+			// off to the horizon behind her, which reads as painted-on rather than as
+			// water closing over a hull. It also tears apart as it ages, so the noise
+			// takes over from the shape with distance astern.
+			const age = saturate( astern.mul( 0.022 ) ).toVar( 'wakeAge' );
+			const decay = exp( astern.mul( - 0.10 ) ).mul( smoothstep( 0.0, 3.0, astern ) )
+				.mul( mix( float( 1.0 ), foamFine.mul( 1.6 ).sub( 0.55 ), age ) );
 			const wake = arm.mul( 0.42 ).add( trail.mul( 0.26 ) ).mul( decay ).mul( u.vesselSpeed ).toVar( 'wake' );
 
 			// Bow wave. A hull pushing water has a bright, hard shoulder ahead of the
@@ -615,7 +621,7 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 		}
 
 		// Distant foam is the worst aliasing source in the whole scene.
-		const foamFade = oneMinus( smoothstep( 1200.0, 6000.0, vRadial ) );
+		const foamFade = oneMinus( smoothstep( 900.0, 4200.0, vRadial ) );
 
 		const erode = foamFine.mul( 0.62 ).add( foamPatch.mul( 0.52 ) ).add( 0.14 ).toVar( 'foamErode' );
 		// Two smoothsteps in series *is* wrong in principle — foamFromJacobian already
@@ -625,7 +631,22 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 		// slab of sea. Re-basing ten hand-tuned numbers to chase a purity argument is
 		// a worse trade than keeping the band, so the band stays and the onset is
 		// moved by wind speed instead — which is the part that was actually missing.
-		const foamMask = smoothstep( 0.22, 0.70, foamRaw.mul( erode ) ).mul( foamFade ).toVar( 'foamMask' );
+		// Widen the band by this pixel's own footprint.
+		//
+		// Pushing foamFade out to six kilometres brought back distant whitecaps, and
+		// with them a field of sub-pixel white specks switching on and off between
+		// frames — the classic hard-threshold-under-minification sparkle, and
+		// genuinely painful to look at when zoomed out. fwidth gives the range the
+		// threshold spans inside one pixel, so far foam converges to its own average
+		// instead of flickering across it. Same foam, resolved rather than sampled.
+		const foamArg = foamRaw.mul( erode ).toVar( 'foamArg' );
+		const foamAA = min( fwidth( foamArg ).mul( 1.4 ), float( 0.34 ) ).toVar( 'foamAA' );
+
+		const foamMask = smoothstep(
+			max( float( 0.22 ).sub( foamAA ), float( 0.02 ) ),
+			float( 0.70 ).add( foamAA ),
+			foamArg
+		).mul( foamFade ).toVar( 'foamMask' );
 
 		// Foam is lit, not painted white: it darkens in shadow and warms at sunset.
 		const foamLit = u.foamColor.mul(
