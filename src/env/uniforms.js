@@ -370,7 +370,14 @@ export function syncUniforms( env, dt = 0 ) {
 	{
 
 		const W = 3.84e-6 * Math.pow( Math.max( 0.5, p.windSpeed ), 3.41 );
-		u.foamThreshold.value = p.foamThreshold * ( 1 - 0.55 * Math.min( 1, W / 0.02 ) );
+
+		// sqrt, because W spans three decades between a calm lagoon and a gale and
+		// feeding it in linearly saturated the storm presets instantly — Storm Front
+		// came out as one solid white slab of sea. The square root compresses that
+		// range into something a threshold can use: 3 m/s barely moves it, 9.5 m/s
+		// takes about a fifth off, 21 m/s takes nearly half.
+		const f = Math.min( 1, Math.sqrt( W / 0.05 ) );
+		u.foamThreshold.value = p.foamThreshold * ( 1 - 0.45 * f );
 
 	}
 	u.foamSharpness.value = p.foamSharpness;

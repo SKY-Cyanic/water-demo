@@ -20,14 +20,14 @@
 // in the same pass.
 
 import { HalfFloatType, LinearFilter, Mesh, MeshBasicNodeMaterial, OrthographicCamera, PlaneGeometry, RGBAFormat, RenderTarget, Scene, Vector2 } from 'three/webgpu';
-import { Fn, float, length, max, min, saturate, smoothstep, step, texture, uniform, uv, vec3, vec4 } from 'three/tsl';
+import { Fn, float, length, max, min, saturate, smoothstep, step, texture, uniform, uv, vec2, vec3, vec4 } from 'three/tsl';
 
 import { createWaveEvaluator, foamFromJacobian } from './waves.js';
 
 export const FOAM_TIERS = {
 	low: { size: 128, window: 220 },
 	medium: { size: 192, window: 240 },
-	high: { size: 256, window: 256 },
+	high: { size: 320, window: 420 },
 	ultra: { size: 384, window: 300 },
 };
 
@@ -38,10 +38,11 @@ export class FoamHistory {
 	 * @param {WaveField} field
 	 * @param {object} tier  one of FOAM_TIERS
 	 */
-	constructor( env, field, tier ) {
+	constructor( env, field, tier, spectral = null ) {
 
 		this.env = env;
 		this.field = field;
+		this.spectral = spectral;
 		this.size = tier.size;
 		this.window = tier.window;
 
@@ -92,7 +93,8 @@ export class FoamHistory {
 
 		const env = this.env;
 		const u = env.u;
-		const evaluate = createWaveEvaluator( this.field, env, { earlyOut: false } );
+		const spectral = this.spectral;
+		const evaluate = spectral ? null : createWaveEvaluator( this.field, env, { earlyOut: false } );
 
 		const material = new MeshBasicNodeMaterial();
 		material.name = 'FoamAccumulate';
@@ -123,13 +125,48 @@ export class FoamHistory {
 
 			/* --- fresh foam from the crest mask -------------------------- */
 
-			// dist = 0: the history buffer is a top-down world map, so there is no
-			// camera distance at which to fade wave components out.
-			const wave = evaluate( worldXZ, float( 0.0 ) );
+			const source = float( 0 ).toVar( 'foamSource' );
 
-			const source = foamFromJacobian(
-				wave.jacobian, length( wave.slope ), u.foamThreshold, u.foamSharpness
-			).mul( this.uSourceGain ).toVar( 'foamSource' );
+			if ( spectral ) {
+
+				// Read the folding metric the compute pass already wrote, from the
+				// same cascades the surface is displaced by.
+				//
+				// This pass used to evaluate the Gerstner field instead. That field
+				// has the right statistics but an entirely different phase, so on the
+				// spectral path the persistent foam was laid down on crests that were
+				// not there — streaks drifting across open water while the actual
+				// breaking crests carried nothing. Three fetches also cost far less
+				// than a twenty-component Gerstner sum, so this is a saving.
+				const fold = float( 0 ).toVar( 'foamFold' );
+				const slope = vec2( 0, 0 ).toVar( 'foamSlope' );
+
+				for ( let c = 0; c < spectral.sizes.length; c ++ ) {
+
+					const s = texture( spectral.slope[ c ], worldXZ.div( spectral.sizes[ c ] ), float( 0 ) );
+					fold.addAssign( s.z );
+					slope.addAssign( s.xy );
+
+				}
+
+				// Jacobian ~= 1 + divergence, exactly as the water surface forms it —
+				// the two have to agree or the persistent foam sits somewhere the
+				// instantaneous crest mask does not.
+				source.assign( foamFromJacobian(
+					fold.add( 1.0 ), length( slope ), u.foamThreshold, u.foamSharpness
+				).mul( this.uSourceGain ) );
+
+			} else {
+
+				// dist = 0: the history buffer is a top-down world map, so there is no
+				// camera distance at which to fade wave components out.
+				const wave = evaluate( worldXZ, float( 0.0 ) );
+
+				source.assign( foamFromJacobian(
+					wave.jacobian, length( wave.slope ), u.foamThreshold, u.foamSharpness
+				).mul( this.uSourceGain ) );
+
+			}
 
 			// max(), not add(): foam saturates. Adding would let a persistent
 			// crest run away to a hard white slab.

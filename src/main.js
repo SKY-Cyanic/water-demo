@@ -297,7 +297,7 @@ class App {
 		// instantaneous crest foam — one fewer render target and one fewer full
 		// wave evaluation per frame.
 		this.foam = tier.foamHistory
-			? new FoamHistory( this.env, this.field, FOAM_TIERS[ tier.foam ] )
+			? new FoamHistory( this.env, this.field, FOAM_TIERS[ tier.foam ], this.spectral?.textures ?? null )
 			: null;
 
 		// The reflection target has to exist before the water material is built,

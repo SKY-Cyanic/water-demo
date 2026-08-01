@@ -618,11 +618,14 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 		const foamFade = oneMinus( smoothstep( 1200.0, 6000.0, vRadial ) );
 
 		const erode = foamFine.mul( 0.62 ).add( foamPatch.mul( 0.52 ) ).add( 0.14 ).toVar( 'foamErode' );
-		// One onset test, not two. foamFromJacobian already decides *whether* a crest
-		// breaks; this smoothstep used to decide it again, and the two in series meant
-		// a fully saturated whitecap landed mid-ramp at ~0.51 and could never reach
-		// white. This band now only shapes the edge.
-		const foamMask = smoothstep( 0.05, 0.55, foamRaw.mul( erode ) ).mul( foamFade ).toVar( 'foamMask' );
+		// Two smoothsteps in series *is* wrong in principle — foamFromJacobian already
+		// decides whether a crest breaks, and this was deciding it again. But all ten
+		// presets' foamThreshold values were authored against the pair, so removing
+		// the second one uniformly over-foams: Storm Front came out as a solid white
+		// slab of sea. Re-basing ten hand-tuned numbers to chase a purity argument is
+		// a worse trade than keeping the band, so the band stays and the onset is
+		// moved by wind speed instead — which is the part that was actually missing.
+		const foamMask = smoothstep( 0.22, 0.70, foamRaw.mul( erode ) ).mul( foamFade ).toVar( 'foamMask' );
 
 		// Foam is lit, not painted white: it darkens in shadow and warms at sunset.
 		const foamLit = u.foamColor.mul(

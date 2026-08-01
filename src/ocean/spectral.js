@@ -23,7 +23,7 @@
 
 import { HalfFloatType, LinearFilter, RGBAFormat, RepeatWrapping, StorageTexture, Vector2 } from 'three/webgpu';
 import {
-	Fn, float, floor, instanceIndex, int, ivec2, cos, sin, sqrt, max, texture, textureStore,
+	Fn, float, floor, instanceIndex, int, ivec2, cos, sin, saturate, sqrt, max, texture, textureStore,
 	uniform, vec2, vec4, attributeArray,
 } from 'three/tsl';
 
@@ -229,7 +229,17 @@ export class SpectralOcean {
 				const divergence = p2.y.mul( amp );
 
 				textureStore( dispTex, ivec2( int( x ), int( z ) ), vec4( dx, dy, dz, divergence ) ).toStack();
-				textureStore( slopeTex, ivec2( int( x ), int( z ) ), vec4( dYdx, dYdz, 0, 1 ) ).toStack();
+				// .z carried nothing. The folding metric goes here so anything that
+				// wants whitecaps can read the *visible* wave field with one fetch,
+				// instead of re-deriving them from a second, differently-phased one.
+				// No extra target, no extra FFT, no extra bandwidth.
+				//
+				// Stored signed and unclamped, because the consumer sums it across
+				// cascades and only then forms the Jacobian. Clamping per cascade
+				// first — which is what the first version did — makes three
+				// already-saturated values add to three, so the fold test saturates
+				// everywhere and the whole sea turns white.
+				textureStore( slopeTex, ivec2( int( x ), int( z ) ), vec4( dYdx, dYdz, divergence, 1 ) ).toStack();
 
 			} )().compute( N * N ) );
 
