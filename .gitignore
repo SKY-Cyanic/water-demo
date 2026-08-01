@@ -1,7 +1,7 @@
-/acceptance.md
-/handoff.md
-/log.md
-/plan.md
-/prompt.md
-/research.md
-/task.md
+# The working docs (log.md, task.md, research.md, handoff.md, plan.md,
+# acceptance.md, prompt.md) used to be listed here. They are tracked now: the
+# incident record in log.md and the API/measurement traps in research.md are
+# the most reusable thing in this repository, and they were the one part of it
+# nobody else could see.
+
+.DS_Store
