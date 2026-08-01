@@ -173,6 +173,10 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 		// Sub-pixel slope variance, accumulated below and turned into roughness.
 		const sigma = float( 0 ).toVar( 'slopeVar' );
 
+		// Fragment-rate crest mask; falls back to the interpolated vertex value on
+		// the Gerstner path, which has no world-space texture to sample.
+		const crestMask = vFoam.toVar( 'crestMask' );
+
 		const invY = float( 1 ).div( max( Nw.y, float( 0.06 ) ) );
 		const grad = vec2( Nw.x.mul( invY ), Nw.z.mul( invY ) ).toVar( 'grad' );
 
@@ -205,6 +209,33 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 			}
 
 			grad.assign( g.negate() );
+
+			// Crest mask at fragment rate, not interpolated from the vertices.
+			//
+			// The ocean mesh is re-centred on the camera every frame with no snap, so
+			// its vertices land on different world positions each frame. Running a
+			// hard threshold there and interpolating the result means the mask flips
+			// between frames and the flip is smeared across a whole triangle — which
+			// is the flicker, and it gets worse the further out you zoom because the
+			// triangles get bigger. The cascades are world-space and stable, so
+			// deriving the mask per pixel from them removes the instability at its
+			// source rather than filtering it afterwards.
+			const foldF = float( 0 ).toVar( 'foldFrag' );
+
+			for ( let c = 0; c < spectral.sizes.length; c ++ ) {
+
+				const [ a, b ] = spectral.slopeFade[ c ];
+				const fade = oneMinus( smoothstep( a, b, vRadial ) );
+				foldF.addAssign(
+					sampleAt( spectral.disp[ c ], vRestXZ, spectral.sizes[ c ] ).w
+						.mul( fade ).mul( grpF ).mul( FOLD_WEIGHT[ c ] ?? 0.15 )
+				);
+
+			}
+
+			crestMask.assign( foamFromJacobian(
+				foldF.add( 1.0 ), length( g ), u.foamThreshold, u.foamSharpness
+			) );
 
 			// A little procedural noise still helps below the finest cascade cell
 			// (about 7 cm), where the spectrum simply has no data.
@@ -557,7 +588,7 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 			vec3( P.xz.mul( 0.085 ).add( foamDrift.mul( 0.4 ) ).add( 7.1 ), u.time.mul( 0.045 ) ), 2, 2.0, 0.5
 		).mul( 0.5 ).add( 0.5 ).toVar( 'foamPatch' );
 
-		const foamRaw = vFoam.mul( u.foamAmount ).toVar( 'foamRaw' );
+		const foamRaw = crestMask.mul( u.foamAmount ).toVar( 'foamRaw' );
 
 		// Waterline. A moored hull still works the water against its planking, and
 		// the resulting collar of aerated foam is the one cue that reliably reads as
@@ -604,17 +635,20 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 
 			// Bow wave. A hull pushing water has a bright, hard shoulder ahead of the
 			// stem — brighter than anything in the wake, because the water there is
-			// being lifted and aerated rather than merely disturbed. Without it the
-			// boat reads as being dragged rather than driven.
+			// being lifted and aerated rather than merely disturbed.
+			//
+			// The *wake* is not drawn here any more. Drawn in the hull's frame it was
+			// rigidly attached to the boat — a white tail towed along behind her
+			// rather than a disturbance left in the water. It is deposited into the
+			// world-space foam history instead, where it stays put and decays, which
+			// is what a wake actually does.
 			const ahead = max( hullLocalOut.y.sub( u.vesselHalf.y.mul( 0.55 ) ), float( 0.0 ) ).toVar( 'bowAhead' );
 			const bow = exp( abs( across.sub( ahead.mul( 0.62 ).add( 0.9 ) ) ).mul( - 2.2 ) )
 				.mul( oneMinus( smoothstep( 0.0, 5.5, ahead ) ) )
 				.mul( u.vesselSpeed )
 				.toVar( 'bowWave' );
 
-			wake.addAssign( bow.mul( 0.55 ) );
-
-			foamRaw.assign( max( foamRaw, collar.add( wake ).mul( torn ).mul( 1.45 ) ) );
+			foamRaw.assign( max( foamRaw, collar.add( bow.mul( 0.6 ) ).mul( torn ).mul( 1.45 ) ) );
 
 		} );
 

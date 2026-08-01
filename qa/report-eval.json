@@ -1,9 +1,9 @@
 {
 	"command": "eval",
 	"origin": "http://localhost:8173",
-	"startedAt": "2026-08-01T02:52:19.079Z",
+	"startedAt": "2026-08-01T03:01:15.999Z",
 	"userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
-	"result": "{\"dtZero\":{\"p999\":83,\"spark\":0.00587},\"dtOneFrame\":{\"p999\":104,\"spark\":0.02582}}",
-	"finishedAt": "2026-08-01T02:52:21.223Z",
+	"result": "{\"foamOn\":{\"p999\":106,\"spark\":0.02584},\"foamOff\":{\"p999\":104,\"spark\":0.02734}}",
+	"finishedAt": "2026-08-01T03:01:40.556Z",
 	"ok": true
 }

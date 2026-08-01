@@ -20,7 +20,7 @@
 // in the same pass.
 
 import { HalfFloatType, LinearFilter, Mesh, MeshBasicNodeMaterial, OrthographicCamera, PlaneGeometry, RGBAFormat, RenderTarget, Scene, Vector2 } from 'three/webgpu';
-import { Fn, float, length, max, min, saturate, smoothstep, step, texture, uniform, uv, vec2, vec3, vec4 } from 'three/tsl';
+import { Fn, If, abs, exp, float, length, max, min, oneMinus, saturate, smoothstep, step, texture, uniform, uv, vec2, vec3, vec4 } from 'three/tsl';
 
 import { createWaveEvaluator, foamFromJacobian } from './waves.js';
 
@@ -178,6 +178,39 @@ export class FoamHistory {
 				).mul( this.uSourceGain ) );
 
 			}
+
+			/* --- the vessel's wake, laid into the world ------------------ */
+
+			// This is the whole point of putting it here rather than in the surface
+			// shader. A wake drawn in the hull's frame is rigidly attached to the
+			// boat and reads as a white tail being towed; deposited into the history
+			// it stays where the water was disturbed, decays on the buffer's own
+			// clock, and drifts downwind with everything else.
+			If( u.vesselMix.greaterThan( 0.001 ), () => {
+
+				const rel = worldXZ.sub( u.vesselPos.xz ).toVar( 'wakeRel' );
+				const c = u.vesselDir.x, sn = u.vesselDir.y;
+				const local = vec2(
+					rel.x.mul( c ).sub( rel.y.mul( sn ) ),
+					rel.x.mul( sn ).add( rel.y.mul( c ) )
+				).toVar( 'wakeLocal' );
+
+				const astern = max( local.y.negate().sub( u.vesselHalf.y.mul( 0.7 ) ), float( 0.0 ) ).toVar( 'wAstern' );
+				const across = abs( local.x ).toVar( 'wAcross' );
+
+				// Kelvin arms at the fixed half-angle, plus the churn between them.
+				// Only the freshly disturbed water is written; the buffer's decay
+				// does the rest, so there is no length constant to tune here.
+				const arm = exp( abs( across.sub( astern.mul( 0.354 ) ) ).mul( - 1.9 ) );
+				const trail = exp( across.div( astern.mul( 0.16 ).add( 1.6 ) ).mul( - 2.2 ) );
+
+				const fresh = smoothstep( 0.0, 3.0, astern ).mul( oneMinus( smoothstep( 4.0, 26.0, astern ) ) );
+
+				source.assign( max( source,
+					arm.mul( 0.85 ).add( trail.mul( 0.5 ) ).mul( fresh ).mul( u.vesselSpeed )
+				) );
+
+			} );
 
 			// max(), not add(): foam saturates. Adding would let a persistent
 			// crest run away to a hard white slab.
