@@ -25,7 +25,7 @@ import {
 } from 'three/tsl';
 
 import { createWaveEvaluator, foamFromJacobian } from './waves.js';
-import { causticPattern, fresnelSchlick, ggxSpecular, liftReflection, rippleSlope, seabedAlbedo, seabedHeight, transmittance } from './shading.js';
+import { causticPattern, fresnelSchlick, ggxSpecular, liftReflection, rippleSlope, seabedAlbedo, seabedHeight, transmittance, waveGroup } from './shading.js';
 
 // Converts the GGX lobe (a density, in sr^-1) into the shader's radiance units.
 // Calibrated so a near-mirror facet clips to white and a wind-roughened surface
@@ -95,6 +95,14 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 			const slope = vec2( 0, 0 ).toVar( 'specSlope' );
 			const divergence = float( 0 ).toVar( 'specDiv' );
 
+			// Wave groups. Real seas arrive in sets — near-frequency components beat
+			// against each other — and a field with uniform amplitude everywhere is
+			// one of the loudest tells that a sea is procedural. The envelope is
+			// mean-1 so the preset's significant height still means what it says, and
+			// its 400 m period is coprime with the 96 m cascade domain, which is what
+			// stops that tile being legible.
+			const grp = waveGroup( restWorld, u.time, u.windDir, u.groupStrength ).toVar( 'waveGrp' );
+
 			for ( let c = 0; c < spectral.sizes.length; c ++ ) {
 
 				const [ f0, f1 ] = spectral.fade[ c ];
@@ -103,9 +111,9 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 				const d = sampleAt( spectral.disp[ c ], restWorld, spectral.sizes[ c ] );
 				const s = sampleAt( spectral.slope[ c ], restWorld, spectral.sizes[ c ] );
 
-				disp.addAssign( d.xyz.mul( fade ) );
-				divergence.addAssign( d.w.mul( fade ) );
-				slope.addAssign( s.xy.mul( fade ) );
+				disp.addAssign( d.xyz.mul( fade ).mul( grp ) );
+				divergence.addAssign( d.w.mul( fade ).mul( grp ) );
+				slope.addAssign( s.xy.mul( fade ).mul( grp ) );
 
 			}
 
@@ -168,13 +176,17 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 			// fragment stage gets waves the geometry never had.
 			const g = vec2( 0, 0 ).toVar( 'specGradFrag' );
 
+			// The identical envelope the vertex stage used. If these two disagree the
+			// shading normal separates from the geometry it is meant to describe.
+			const grpF = waveGroup( vRestXZ, u.time, u.windDir, u.groupStrength ).toVar( 'waveGrpF' );
+
 			for ( let c = 0; c < spectral.sizes.length; c ++ ) {
 
 				const [ a, b ] = spectral.slopeFade[ c ];
 				const fade = oneMinus( smoothstep( a, b, vRadial ) );
 				const s = sampleAt( spectral.slope[ c ], vRestXZ, spectral.sizes[ c ] ).xy;
 
-				g.addAssign( s.mul( fade ) );
+				g.addAssign( s.mul( fade ).mul( grpF ) );
 
 				// The slope energy this cascade is *losing* to distance is exactly
 				// the slope the pixel can no longer resolve — which is what a
@@ -286,7 +298,17 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 			const wobble = grad.mul( oneMinus( smoothstep( 4.0, 90.0, vRadial ) ) ).mul( 0.055 );
 			const rp = texture( opts.propReflection, saturate( screenUV.add( wobble ) ) ).toVar( 'propRefl' );
 
-			reflection.assign( mix( reflection, rp.rgb, saturate( rp.a ).mul( u.vesselMix ) ) );
+			// Confined to water near the boat.
+			//
+			// screenUV is exact only for a mirror plane at y = 0, and the surface is
+			// not one — it is displaced by metres of swell. The error grows with the
+			// grazing angle, so far water was showing a ghost of the hull that slid
+			// across the sea as the camera moved. A fifteen-metre boat has no
+			// business reflecting in water forty metres away at these angles anyway.
+			const dVes = length( P.xz.sub( u.vesselPos.xz ) ).toVar( 'vesselDist' );
+			const reflNear = oneMinus( smoothstep( 14.0, 40.0, dVes ) ).toVar( 'reflNear' );
+
+			reflection.assign( mix( reflection, rp.rgb, saturate( rp.a ).mul( u.vesselMix ).mul( reflNear ) ) );
 
 		}
 
@@ -535,7 +557,12 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 		// wave foam so it is not a drawn outline.
 		If( u.vesselMix.greaterThan( 0.001 ), () => {
 
-			const collar = smoothstep( 0.90, 1.00, hullD ).mul( oneMinus( smoothstep( 1.00, 1.14, hullD ) ) );
+			// Aeration is not a ring of constant width. It is heaviest where the hull
+			// is working the water hardest — forward — and it bleeds outward.
+			const foreBias = saturate( hullLocalOut.y.div( u.vesselHalf.y ).mul( 0.5 ).add( 0.62 ) );
+			const collar = smoothstep( 0.90, 1.00, hullD )
+				.mul( oneMinus( smoothstep( 1.02, 1.35, hullD ) ) )
+				.mul( foreBias );
 
 			// Torn by the same two noise scales as wave foam. A clean ring around
 			// the hull is unmistakably a drawn outline; aeration is patchy.
@@ -560,6 +587,18 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 			// identical, so the whole trail flattened into one shape with no edge.
 			const decay = exp( astern.mul( - 0.045 ) ).mul( smoothstep( 0.0, 3.0, astern ) );
 			const wake = arm.mul( 0.42 ).add( trail.mul( 0.26 ) ).mul( decay ).mul( u.vesselSpeed ).toVar( 'wake' );
+
+			// Bow wave. A hull pushing water has a bright, hard shoulder ahead of the
+			// stem — brighter than anything in the wake, because the water there is
+			// being lifted and aerated rather than merely disturbed. Without it the
+			// boat reads as being dragged rather than driven.
+			const ahead = max( hullLocalOut.y.sub( u.vesselHalf.y.mul( 0.55 ) ), float( 0.0 ) ).toVar( 'bowAhead' );
+			const bow = exp( abs( across.sub( ahead.mul( 0.62 ).add( 0.9 ) ) ).mul( - 2.2 ) )
+				.mul( oneMinus( smoothstep( 0.0, 5.5, ahead ) ) )
+				.mul( u.vesselSpeed )
+				.toVar( 'bowWave' );
+
+			wake.addAssign( bow.mul( 0.55 ) );
 
 			foamRaw.assign( max( foamRaw, collar.add( wake ).mul( torn ).mul( 1.45 ) ) );
 

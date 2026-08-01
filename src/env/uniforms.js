@@ -28,7 +28,7 @@ export const SCALAR_KEYS = [
 	// water optics
 	'waterClarity', 'absorptionR', 'absorptionG', 'absorptionB',
 	'roughness', 'sssStrength', 'reflectivity', 'varianceRough',
-	'volumeGeom', 'scatterStrength',
+	'volumeGeom', 'scatterStrength', 'groupStrength',
 	// foam
 	'foamAmount', 'foamThreshold', 'foamPersistence', 'foamSharpness',
 	// underwater
@@ -47,85 +47,104 @@ export const COLOR_KEYS = [
 /** Booleans / discrete values that never interpolate — they switch instantly. */
 export const FLAG_KEYS = [ 'seabedEnabled' ];
 
+/**
+ * Authored defaults for every tunable.
+ *
+ * Module level, and `snapshotParams` falls back to it, because a preset only
+ * lists the keys its author cared about. When a new parameter is added to
+ * SCALAR_KEYS but not to all ten presets, a cross-fade reads `undefined` at both
+ * ends, `lerp` returns NaN, and the NaN reaches a uniform — which renders as a
+ * black screen with no error anywhere. That has now happened once; the fallback
+ * is so it cannot happen again.
+ */
+export function defaultParams() {
+
+	return {
+
+			/* --- sun & sky ------------------------------------------------- */
+			sunElevation: 14,        // degrees above the horizon
+			sunAzimuth: 40,          // degrees, 0 = +Z
+			sunIntensity: 1.0,
+			sunColor: '#fff2dd',
+			skyZenith: '#2a63b4',
+			skyHorizon: '#a8c8e0',
+			skyGround: '#4a5f70',
+			skyGradPower: 3.2,       // horizon->zenith falloff
+			hazeColor: '#cfe0ec',
+			hazeStrength: 0.55,
+			hazeFalloff: 26.0,
+			sunGlowPower: 220.0,
+			sunGlowStrength: 1.4,
+			sunDiskSize: 1.0,        // multiplier on the ~0.53 deg solar disc
+			starIntensity: 0.0,
+
+			/* --- clouds ---------------------------------------------------- */
+			cloudCoverage: 0.42,
+			cloudOpacity: 0.85,
+			cloudScale: 1.15,
+			cloudSpeed: 0.6,
+			cloudLit: '#ffffff',
+			cloudShadow: '#8ea2b6',
+
+			/* --- atmosphere ------------------------------------------------ */
+			fogColor: '#b9d0e2',
+			fogDensity: 0.055,       // scaled internally; see material.js
+			exposure: 1.0,
+
+			/* --- waves ----------------------------------------------------- */
+			waveHeight: 1.0,
+			waveChoppy: 0.85,        // total Gerstner steepness budget
+			windSpeed: 9.0,          // m/s — drives band amplitudes
+			windAngle: 40,           // degrees
+			waveScale: 1.0,          // global wavelength multiplier
+			detailStrength: 1.0,     // fragment-side ripple normals
+
+			/* --- water optics ---------------------------------------------- */
+			waterDeep: '#04212e',
+			waterShallow: '#1c7f86',
+			waterScatter: '#2fa08c',
+			waterClarity: 1.0,
+			absorptionR: 0.42,       // Beer-Lambert extinction per metre, per channel
+			absorptionG: 0.11,
+			absorptionB: 0.055,
+			roughness: 0.09,
+			varianceRough: 1.0,
+			volumeGeom: 1.0,
+			scatterStrength: 0.085,
+			groupStrength: 0.35,
+			sssStrength: 1.0,        // back-lit wave crest translucency
+			reflectivity: 1.0,
+
+			/* --- foam ------------------------------------------------------ */
+			foamAmount: 0.75,
+			foamThreshold: 0.52,
+			foamPersistence: 0.72,
+			foamSharpness: 1.0,
+			foamColor: '#eef6fa',
+
+			/* --- weather ---------------------------------------------------- */
+			rainAmount: 0.0,
+
+			/* --- underwater ------------------------------------------------ */
+			uwTint: '#0d5566',
+			uwVisibility: 26.0,      // metres
+			causticStrength: 0.8,
+			particleDensity: 0.6,
+
+			/* --- seabed ---------------------------------------------------- */
+			seabedEnabled: 0,
+			seabedDepth: 16.0,
+			seabedColor: '#b7a179',
+
+		};
+
+}
+
+const DEFAULTS = /*@__PURE__*/ defaultParams();
+
 export function createEnv() {
 
-	const params = {
-
-		/* --- sun & sky ------------------------------------------------- */
-		sunElevation: 14,        // degrees above the horizon
-		sunAzimuth: 40,          // degrees, 0 = +Z
-		sunIntensity: 1.0,
-		sunColor: '#fff2dd',
-		skyZenith: '#2a63b4',
-		skyHorizon: '#a8c8e0',
-		skyGround: '#4a5f70',
-		skyGradPower: 3.2,       // horizon->zenith falloff
-		hazeColor: '#cfe0ec',
-		hazeStrength: 0.55,
-		hazeFalloff: 26.0,
-		sunGlowPower: 220.0,
-		sunGlowStrength: 1.4,
-		sunDiskSize: 1.0,        // multiplier on the ~0.53 deg solar disc
-		starIntensity: 0.0,
-
-		/* --- clouds ---------------------------------------------------- */
-		cloudCoverage: 0.42,
-		cloudOpacity: 0.85,
-		cloudScale: 1.15,
-		cloudSpeed: 0.6,
-		cloudLit: '#ffffff',
-		cloudShadow: '#8ea2b6',
-
-		/* --- atmosphere ------------------------------------------------ */
-		fogColor: '#b9d0e2',
-		fogDensity: 0.055,       // scaled internally; see material.js
-		exposure: 1.0,
-
-		/* --- waves ----------------------------------------------------- */
-		waveHeight: 1.0,
-		waveChoppy: 0.85,        // total Gerstner steepness budget
-		windSpeed: 9.0,          // m/s — drives band amplitudes
-		windAngle: 40,           // degrees
-		waveScale: 1.0,          // global wavelength multiplier
-		detailStrength: 1.0,     // fragment-side ripple normals
-
-		/* --- water optics ---------------------------------------------- */
-		waterDeep: '#04212e',
-		waterShallow: '#1c7f86',
-		waterScatter: '#2fa08c',
-		waterClarity: 1.0,
-		absorptionR: 0.42,       // Beer-Lambert extinction per metre, per channel
-		absorptionG: 0.11,
-		absorptionB: 0.055,
-		roughness: 0.09,
-		varianceRough: 1.0,
-		volumeGeom: 1.0,
-		scatterStrength: 0.085,
-		sssStrength: 1.0,        // back-lit wave crest translucency
-		reflectivity: 1.0,
-
-		/* --- foam ------------------------------------------------------ */
-		foamAmount: 0.75,
-		foamThreshold: 0.52,
-		foamPersistence: 0.72,
-		foamSharpness: 1.0,
-		foamColor: '#eef6fa',
-
-		/* --- weather ---------------------------------------------------- */
-		rainAmount: 0.0,
-
-		/* --- underwater ------------------------------------------------ */
-		uwTint: '#0d5566',
-		uwVisibility: 26.0,      // metres
-		causticStrength: 0.8,
-		particleDensity: 0.6,
-
-		/* --- seabed ---------------------------------------------------- */
-		seabedEnabled: 0,
-		seabedDepth: 16.0,
-		seabedColor: '#b7a179',
-
-	};
+	const params = defaultParams();
 
 	const u = {
 
@@ -187,6 +206,7 @@ export function createEnv() {
 		// wave-height-only lerp exactly. backscatter is the water's b_b, which
 		// together with absorption sets the single-scattering albedo.
 		volumeGeom: uniform( 1 ),
+		groupStrength: uniform( 0.35 ),
 		backscatter: uniform( new Vector3( 0.02, 0.05, 0.06 ) ),
 		waveHs: uniform( 1.8 ),
 		sssStrength: uniform( 1 ),
@@ -326,6 +346,7 @@ export function syncUniforms( env, dt = 0 ) {
 	u.roughness.value = p.roughness;
 	u.varianceRough.value = p.varianceRough ?? 1;
 	u.volumeGeom.value = p.volumeGeom ?? 1;
+	u.groupStrength.value = p.groupStrength ?? 0.35;
 	u.waveHs.value = Math.max( 0.05, p.waveHeight );
 
 	// Backscatter shares the scatter colour's chromaticity — they describe the
@@ -415,9 +436,12 @@ export function blendParams( out, a, b, t ) {
 /** Shallow copy of the interpolatable keys only. */
 export function snapshotParams( p, out = {} ) {
 
-	for ( let i = 0; i < SCALAR_KEYS.length; i ++ ) out[ SCALAR_KEYS[ i ] ] = p[ SCALAR_KEYS[ i ] ];
-	for ( let i = 0; i < COLOR_KEYS.length; i ++ ) out[ COLOR_KEYS[ i ] ] = p[ COLOR_KEYS[ i ] ];
-	for ( let i = 0; i < FLAG_KEYS.length; i ++ ) out[ FLAG_KEYS[ i ] ] = p[ FLAG_KEYS[ i ] ];
+	const d = DEFAULTS;
+	const pick = ( k ) => ( p[ k ] !== undefined ? p[ k ] : d[ k ] );
+
+	for ( let i = 0; i < SCALAR_KEYS.length; i ++ ) out[ SCALAR_KEYS[ i ] ] = pick( SCALAR_KEYS[ i ] );
+	for ( let i = 0; i < COLOR_KEYS.length; i ++ ) out[ COLOR_KEYS[ i ] ] = pick( COLOR_KEYS[ i ] );
+	for ( let i = 0; i < FLAG_KEYS.length; i ++ ) out[ FLAG_KEYS[ i ] ] = pick( FLAG_KEYS[ i ] );
 	return out;
 
 }

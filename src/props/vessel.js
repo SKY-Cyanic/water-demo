@@ -24,9 +24,9 @@ import {
 	MeshBasicNodeMaterial,
 } from 'three/webgpu';
 import {
-	Fn, abs, attribute, cross, dot, faceDirection, float, floor, fract, max, min, mix,
-	mx_fractal_noise_float, normalLocal, normalize, oneMinus, positionGeometry, saturate, sin,
-	smoothstep, step, texture, varyingProperty, vec2, vec3, vec4,
+	Fn, abs, attribute, cameraPosition, cross, dot, faceDirection, float, floor, fract, max, min,
+	mix, mx_fractal_noise_float, normalLocal, normalize, oneMinus, positionGeometry, positionWorld,
+	pow, saturate, sin, smoothstep, step, texture, varyingProperty, vec2, vec3, vec4,
 } from 'three/tsl';
 
 /* ------------------------------------------------------------------ shapes */
@@ -692,6 +692,13 @@ export class Vessel {
 			const isDeck = step( 1.5, part ).mul( step( part, float( 2.5 ) ) ).toVar( 'isDeck' );
 			const isHull = step( part, float( 0.5 ) ).toVar( 'isHull' );
 
+			// Wet-but-above-water. A hull that is bone dry right down to the
+			// waterline is one of the oldest tells in the book: real topsides carry a
+			// band of wet, dark, glossy paint where the surge has just been. The band
+			// breathes, because the water does.
+			const wash = sin( u.time.mul( 1.35 ) ).mul( 0.12 ).toVar( 'vesWash' );
+			const wet = smoothstep( 0.55, - 0.05, vLocal.y.sub( wash ) ).mul( isHull ).toVar( 'vesWet' );
+
 			// A seam is a groove, so it reads as a thin dark line plus a lighter
 			// edge where the plank above it catches the light. `axis` selects which
 			// way the boards run: fore-and-aft on the topsides, athwartships on the
@@ -748,6 +755,9 @@ export class Vessel {
 
 			paint.mulAssign( max( detail, float( 0.35 ) ) );
 
+			// Wet paint is darker and much glossier than dry.
+			paint.mulAssign( mix( float( 1.0 ), float( 0.58 ), wet ) );
+
 			// Anything below the waterline is seen through the water column.
 			const submerged = smoothstep( 0.10, - 0.55, vLocalY ).toVar( 'vesSub' );
 			paint.assign( mix( paint, paint.mul( u.waterShallow ).mul( 1.9 ), submerged ) );
@@ -778,6 +788,13 @@ export class Vessel {
 			const lit = paint.mul(
 				u.sunColor.mul( sunSq.mul( u.sunIntensity ).mul( 1.30 ) ).add( hemi )
 			).toVar( 'vesLit' );
+
+			// The gloss the wet band buys: a tight lobe toward the sun, present only
+			// where the paint is wet.
+			const H = normalize( u.sunDir.add( normalize( cameraPosition.sub( positionWorld ) ) ) );
+			lit.addAssign( u.sunColor.mul(
+				pow( saturate( dot( n, H ) ), 48.0 ).mul( wet ).mul( u.sunIntensity ).mul( 0.55 )
+			) );
 
 			// Sails are thin and translucent: backlit, they glow rather than fall
 			// into silhouette. Without this the leeward side of every sail is a flat

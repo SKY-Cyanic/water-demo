@@ -192,3 +192,25 @@ export const seabedAlbedo = /*@__PURE__*/ Fn( ( [ p, sand ] ) => {
 	return mix( base, base.mul( vec3( 0.14, 0.24, 0.20 ) ), weed.mul( 0.92 ) );
 
 } );
+
+/**
+ * Wave-group envelope.
+ *
+ * Mean 1.0, so multiplying a cascade by it leaves the significant wave height
+ * the preset asked for intact while redistributing it into sets. Drifts at
+ * roughly half the phase speed, which is the deep-water group velocity — sets
+ * travel slower than the waves inside them.
+ *
+ * @param {Node<vec2>}  p       world XZ
+ * @param {Node<float>} time
+ * @param {Node<vec2>}  wind    unit wind direction
+ * @param {Node<float>} amount  0 disables it exactly
+ */
+export const waveGroup = /*@__PURE__*/ Fn( ( [ p, time, wind, amount ] ) => {
+
+	const q = p.mul( 0.0025 ).sub( wind.mul( time.mul( 0.4 ) ) ).toVar();
+	const n = mx_fractal_noise_float( vec3( q, 0.0 ), 2, 2.0, 0.5 );
+
+	return float( 1.0 ).add( n.mul( amount ) );
+
+} );
