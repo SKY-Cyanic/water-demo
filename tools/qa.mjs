@@ -303,6 +303,10 @@ const VIEWS = {
 	boatBow: { x: - 1.62, z: 25.10, y: 3.5, yaw: - 1.0000, pitch: - 0.1521 },
 	boatStern: { x: 26.80, z: 17.55, y: 5.0, yaw: 1.5360, pitch: - 0.2359 },
 	boatTop: { x: 15.86, z: 24.57, y: 9.0, yaw: 0.5708, pitch: - 0.7141 },
+	// Zoomed out. The old set was entirely close-up and stationary, which is
+	// exactly the condition under which distant-foam sparkle cannot appear.
+	wide: { y: 42, yaw: Math.PI * 1.18, pitch: - 0.16 },
+	wideHigh: { y: 120, yaw: Math.PI * 0.4, pitch: - 0.30 },
 	low: { y: 2.2, yaw: Math.PI * 1.05, pitch: - 0.02 },
 	// Angled down enough that the bottom is actually in frame.
 	lagoon: { y: 3.4, yaw: Math.PI * 1.05, pitch: - 0.22 },
@@ -652,6 +656,60 @@ try {
 
 		report.fftAllPass = report.fft.every( ( r ) => r.pass ) && report.spectrum.pass && report.ocean.pass;
 		console.log( report.fftAllPass ? '  all spectral checks PASS' : '  SPECTRAL VERIFICATION FAILED' );
+
+	}
+
+	if ( command === 'strip' ) {
+
+		// Contact sheets. One image per scenario, eight frames of motion in each.
+		await chrome.goto( ORIGIN + '/' );
+
+		const cases = [
+			[ 'open-sea', 'wide', 'qa-motion-wide.png', 0.15 ],
+			[ 'open-sea', 'boatStern', 'qa-motion-wake.png', 0.35 ],
+			[ 'storm-front', 'high', 'qa-motion-storm.png', 0.15 ],
+			[ 'trade-winds', 'vessel', 'qa-motion-vessel.png', 0.30 ],
+		];
+
+		for ( const [ preset, view, file, dt ] of cases ) {
+
+			// vesselHove:false — the boat has to be moving, or the wake and the
+			// heading are exactly the things the sheet cannot show.
+			await chrome.eval( setState( { preset, view } ) + '; window.__set({ vesselHove:false, autoQuality:false })' );
+			await sleep( 2500 );
+
+			const url = await chrome.eval( `window.__strip({ frames:8, dt:${dt}, cols:4 })` );
+			writeFileSync( join( ROOT, 'qa', file ), Buffer.from( url.split( ',' )[ 1 ], 'base64' ) );
+			console.log( '  wrote', file );
+
+		}
+
+		report.strips = cases.map( ( c ) => c[ 2 ] );
+
+	}
+
+	if ( command === 'flicker' ) {
+
+		// Sub-pixel sparkle, at native resolution. See the note on __flicker for
+		// why the mean is useless here and the tail is not.
+		await chrome.setViewport( 1920, 1080, 1 );
+		await chrome.goto( ORIGIN + '/' );
+
+		const out = {};
+
+		for ( const [ preset, view ] of [ [ 'open-sea', 'wide' ], [ 'open-sea', 'wideHigh' ], [ 'storm-front', 'wide' ] ] ) {
+
+			await chrome.eval( setState( { preset, view } ) + '; window.__set({ autoQuality:false })' );
+			await sleep( 2500 );
+
+			// Water only: the sky above the horizon has its own noise sources.
+			const r = await chrome.eval( 'window.__flicker({ top:0.45, bottom:1.0 })' );
+			out[ `${preset}/${view}` ] = r;
+			console.log( `  ${preset}/${view}: mean ${r.meanDelta}  p99.9 ${r.p999Delta}  spark ${( r.sparkFraction * 100 ).toFixed( 3 )}%  @${r.resolution}` );
+
+		}
+
+		report.flicker = out;
 
 	}
 

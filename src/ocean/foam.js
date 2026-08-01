@@ -141,11 +141,22 @@ export class FoamHistory {
 				const fold = float( 0 ).toVar( 'foamFold' );
 				const slope = vec2( 0, 0 ).toVar( 'foamSlope' );
 
+				// Weighted, and the finest cascade barely counts.
+				//
+				// Whitecaps come from the energetic wind sea folding over, not from
+				// capillary ripples. Summing all three cascades' divergence at full
+				// weight let the 18 m chop — which reverses several times a second —
+				// drive the crest test, so the entire foam field was regenerated every
+				// frame. Measured: 99.97% of water pixels changing by more than 60/255
+				// in a thirtieth of a second. That is not sparkle, it is a boil, and it
+				// is what made the sea painful to look at zoomed out.
+				const FOLD_WEIGHT = [ 1.0, 0.8, 0.15 ];
+
 				for ( let c = 0; c < spectral.sizes.length; c ++ ) {
 
 					const s = texture( spectral.slope[ c ], worldXZ.div( spectral.sizes[ c ] ), float( 0 ) );
-					fold.addAssign( s.z );
-					slope.addAssign( s.xy );
+					fold.addAssign( s.z.mul( FOLD_WEIGHT[ c ] ?? 0.15 ) );
+					slope.addAssign( s.xy.mul( FOLD_WEIGHT[ c ] ?? 0.15 ) );
 
 				}
 

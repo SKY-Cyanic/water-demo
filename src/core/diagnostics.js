@@ -238,6 +238,158 @@ export function installQAHooks( app ) {
 
 	};
 
+	/**
+	 * A contact sheet: `n` frames `dt` apart, tiled into one image.
+	 *
+	 * Everything that went wrong in this demo and was not caught by a screenshot
+	 * went wrong *over time* — a wake that never faded, a boat that only ever
+	 * sailed one way, foam flickering between frames, a preset cross-fade that
+	 * turned the sea black halfway through. A single still cannot show any of
+	 * them, and reviewing eight separate stills is expensive. One tiled image is
+	 * cheap and shows motion directly.
+	 */
+	window.__strip = async ( { frames = 8, dt = 0.12, cols = 4, scale = 0.34, hideUI = true } = {} ) => {
+
+		const restore = hideUI ? app.ui.hideForCapture() : null;
+
+		const shots = [];
+
+		for ( let i = 0; i < frames; i ++ ) {
+
+			if ( i > 0 ) window.__advance( dt );
+			app.render();
+			await presented();
+			app.render();
+			await presented();
+			shots.push( app.renderer.domElement.toDataURL( 'image/png' ) );
+
+		}
+
+		if ( restore ) restore();
+
+		const w = Math.round( app.renderer.domElement.width * scale );
+		const h = Math.round( app.renderer.domElement.height * scale );
+		const rows = Math.ceil( frames / cols );
+
+		const sheet = document.createElement( 'canvas' );
+		sheet.width = w * cols;
+		sheet.height = h * rows;
+		const g = sheet.getContext( '2d' );
+		g.fillStyle = '#000';
+		g.fillRect( 0, 0, sheet.width, sheet.height );
+
+		for ( let i = 0; i < shots.length; i ++ ) {
+
+			const img = new Image();
+			img.src = shots[ i ];
+			await img.decode();
+			g.drawImage( img, ( i % cols ) * w, Math.floor( i / cols ) * h, w, h );
+
+			g.font = '16px monospace';
+			g.fillStyle = '#0f0';
+			g.fillText( `+${( i * dt ).toFixed( 2 )}s`, ( i % cols ) * w + 8, Math.floor( i / cols ) * h + 20 );
+
+		}
+
+		return sheet.toDataURL( 'image/png' );
+
+	};
+
+	/**
+	 * Inter-frame flicker, measured at native resolution.
+	 *
+	 * The mean absolute difference is the wrong statistic and it cost me a wasted
+	 * measurement: sparkle is a *small number of pixels changing a lot*, which a
+	 * mean over a million pixels buries completely. Worse, the first attempt
+	 * downsampled the captures before differencing, and that averaging is exactly
+	 * the filter whose absence it was trying to detect.
+	 *
+	 * So: full resolution, and report the tail — the 99.9th percentile delta and
+	 * the fraction of pixels that jump by more than `spark`. Those move when
+	 * speckle appears; the mean does not.
+	 */
+	window.__flicker = async ( { dt = 1 / 30, spark = 60, top = 0.0, bottom = 1.0 } = {} ) => {
+
+		// Every render() steps the stateful passes — the foam history decays,
+		// advects and re-accumulates. grab() renders twice to defeat the stale
+		// presented-surface problem, so a naive implementation advanced foam four
+		// or five steps between the two frames it was comparing while the waves
+		// advanced by one. The result: the whole foam field looked like it was
+		// boiling, and the measurement blamed the renderer for what the
+		// measurement was doing. Freeze the sim around the captures and let
+		// __advance be the only thing that steps it.
+		const wasPaused = app.paused;
+
+		const grab = async () => {
+
+			app.paused = true;
+			app.render();
+			await presented();
+			app.render();
+			await presented();
+
+			const src = app.renderer.domElement;
+			const y0 = Math.floor( src.height * top );
+			const y1 = Math.floor( src.height * bottom );
+
+			const c = document.createElement( 'canvas' );
+			c.width = src.width;
+			c.height = y1 - y0;
+			const g = c.getContext( '2d', { willReadFrequently: true } );
+			g.drawImage( src, 0, - y0 );
+			return g.getImageData( 0, 0, c.width, c.height ).data;
+
+		};
+
+		const restore = app.ui.hideForCapture();
+
+		const a = await grab();
+
+		app.paused = false;
+		window.__advance( dt );
+
+		const b = await grab();
+
+		app.paused = wasPaused;
+		restore();
+
+		const n = a.length / 4;
+		const deltas = new Uint8Array( n );
+		let sum = 0, sparks = 0;
+
+		for ( let i = 0, j = 0; i < a.length; i += 4, j ++ ) {
+
+			// Luminance-ish: speckle is achromatic, and this avoids counting a
+			// hue shift three times.
+			const d = Math.abs( ( a[ i ] + a[ i + 1 ] + a[ i + 2 ] ) - ( b[ i ] + b[ i + 1 ] + b[ i + 2 ] ) ) / 3;
+			deltas[ j ] = Math.min( 255, d );
+			sum += d;
+			if ( d > spark ) sparks ++;
+
+		}
+
+		const hist = new Uint32Array( 256 );
+		for ( let j = 0; j < n; j ++ ) hist[ deltas[ j ] ] ++;
+
+		let acc = 0, p999 = 0;
+		const want = n * 0.999;
+		for ( let v = 0; v < 256; v ++ ) {
+
+			acc += hist[ v ];
+			if ( acc >= want ) { p999 = v; break; }
+
+		}
+
+		return {
+			pixels: n,
+			resolution: `${app.renderer.domElement.width}x${app.renderer.domElement.height}`,
+			meanDelta: +( sum / n ).toFixed( 3 ),
+			p999Delta: p999,
+			sparkFraction: +( sparks / n ).toFixed( 5 ),
+		};
+
+	};
+
 	/** Current state, for logging alongside a capture. */
 	window.__state = () => ( {
 		backend: app.backendName,

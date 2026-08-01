@@ -69,6 +69,9 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 	// LOD: these textures carry no mipmaps and the vertex stage has no
 	// derivatives, so an implicit lookup would be undefined there.
 	const spectral = opts.spectral ?? null;
+
+	// How much each cascade's folding counts toward breaking. See foam.js.
+	const FOLD_WEIGHT = [ 1.0, 0.8, 0.15 ];
 	const sampleAt = ( tex, worldXZ, size ) => texture( tex, worldXZ.div( size ), float( 0 ) );
 
 	// The whole wave evaluation MUST be built inside an Fn body.
@@ -112,7 +115,12 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 				const s = sampleAt( spectral.slope[ c ], restWorld, spectral.sizes[ c ] );
 
 				disp.addAssign( d.xyz.mul( fade ).mul( grp ) );
-				divergence.addAssign( d.w.mul( fade ).mul( grp ) );
+
+				// The chop cascade reverses several times a second; letting it drive
+				// the fold test makes the crest mask flicker rather than travel with
+				// the wave that is actually breaking. Same weights as the foam
+				// history uses, and for the same reason.
+				divergence.addAssign( d.w.mul( fade ).mul( grp ).mul( FOLD_WEIGHT[ c ] ?? 0.15 ) );
 				slope.addAssign( s.xy.mul( fade ).mul( grp ) );
 
 			}
