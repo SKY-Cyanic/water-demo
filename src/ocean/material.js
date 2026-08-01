@@ -517,8 +517,20 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 		// the face's angle to the sun the same way a diffuse surface does. Written
 		// mean-preserving at nDotL = 0.5 so the ten authored presets keep their
 		// exposure and this only redistributes contrast across the wave.
+		//
+		// Off the *wave-scale* normal, not the per-pixel one. Light that has been
+		// refracted in, scattered and sent back out has been averaged over the
+		// whole slope distribution inside the pixel, so the diffuse term converges
+		// on the mean normal — it does not track individual ripples. Using the
+		// sharp normal here gave the body the same aliasing the specular lobe has,
+		// and on Storm Front, which is nearly all steep chop, it more than doubled
+		// the frame-to-frame spark fraction. The shading that was worth having is
+		// at wave scale anyway: it is the face of the swell that changes colour,
+		// not the capillary waves on it.
+		const nDotLBody = saturate( dot( Nw, u.sunDir ) ).toVar( 'nDotLBody' );
+
 		const bodyLight = ambient.mul(
-			mix( float( 1.0 ), nDotL.add( 0.5 ), u.bodySunGain )
+			mix( float( 1.0 ), nDotLBody.add( 0.5 ), u.bodySunGain )
 		).toVar( 'bodyLight' );
 
 		// Volume colour = the authored deep/shallow gradient under direct light,
@@ -743,10 +755,30 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 		// picks up the colour of the water it is sitting on. A single uniform
 		// white fill is the difference between foam and a brush stroke, and at
 		// this size that read is most of what says "sea" rather than "render".
-		const bubble = foamFine.mul( 0.46 ).add( foamPatch.mul( 0.22 ) ).add( 0.60 ).toVar( 'foamBubble' );
+		//
+		// Faded to flat with distance. foamFine is three octaves from a 2.3 m base,
+		// so its finest detail is about 0.6 m and goes sub-pixel beyond a few
+		// hundred metres — where it stops being structure and becomes sparkle. On
+		// Storm Front, which is most of the way to full coverage, adding it
+		// unfaded tripled the frame-to-frame spark fraction. The mean of the
+		// unfaded expression is 0.94, so blending to 1.0 barely moves the
+		// brightness; it only removes detail that could not be resolved anyway.
+		const bubbleNear = oneMinus( smoothstep( 250.0, 900.0, vRadial ) );
+		const bubble = mix(
+			float( 1.0 ),
+			foamFine.mul( 0.46 ).add( foamPatch.mul( 0.22 ) ).add( 0.60 ),
+			bubbleNear
+		).toVar( 'foamBubble' );
 
+		// Lit by the sky and the sun, not by a constant. `ambient` carries a floor
+		// of 0.30 that exists to keep wave troughs off black, and running foam
+		// through it made a whitecap the brightest object in the frame at night:
+		// Moonlit's wake was an opaque white ribbon laid over a near-black sea,
+		// glowing as though it were a source. Foam is a diffuse white reflector,
+		// so its colour is simply the light arriving at it, and the sky term drops
+		// with the sun where the floor could not.
 		const foamLit = u.foamColor.mul(
-			ambient.mul( 0.62 ).add( nDotL.mul( u.sunIntensity ).mul( 0.55 ) )
+			skyLight.mul( 1.15 ).add( u.sunColor.mul( nDotL.mul( u.sunIntensity ).mul( 0.55 ) ) )
 		).mul( bubble ).toVar( 'foamLit' );
 
 		// Thin foam is translucent. Blending toward the lit colour with a mask
