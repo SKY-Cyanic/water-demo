@@ -334,7 +334,7 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 			// with the water instead of sitting on it like a decal; it is scaled
 			// down with distance because a gradient that displaces by half a screen
 			// near the camera displaces the horizon into nonsense.
-			const wobble = grad.mul( oneMinus( smoothstep( 4.0, 90.0, vRadial ) ) ).mul( 0.055 );
+			const wobble = grad.mul( oneMinus( smoothstep( 4.0, 90.0, vRadial ) ) ).mul( 0.105 );
 			const rp = texture( opts.propReflection, saturate( screenUV.add( wobble ) ) ).toVar( 'propRefl' );
 
 			// Confined to water near the boat.
@@ -344,8 +344,17 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 			// grazing angle, so far water was showing a ghost of the hull that slid
 			// across the sea as the camera moved. A fifteen-metre boat has no
 			// business reflecting in water forty metres away at these angles anyway.
+			//
+			// It also has to give way to the roughness. A mirror image survives only
+			// on water smooth enough to hold it; on a chop face it is scattered into
+			// the general brightness of the surface. Without this the hull's dark
+			// side came back as a hard navy slab lying on top of the waves, which is
+			// what a *sharp* reflection of a dark object looks like on water that
+			// could not possibly be sharp.
 			const dVes = length( P.xz.sub( u.vesselPos.xz ) ).toVar( 'vesselDist' );
-			const reflNear = oneMinus( smoothstep( 14.0, 40.0, dVes ) ).toVar( 'reflNear' );
+			const reflNear = oneMinus( smoothstep( 14.0, 40.0, dVes ) )
+				.mul( oneMinus( saturate( rough.mul( 3.2 ) ) ) )
+				.toVar( 'reflNear' );
 
 			reflection.assign( mix( reflection, rp.rgb, saturate( rp.a ).mul( u.vesselMix ).mul( reflNear ) ) );
 
@@ -497,10 +506,25 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 		// Beer-Lambert: how much of the bottom survives the water column.
 		const T = transmittance( u.absorption, pathLen ).mul( u.seabedMix ).toVar( 'T' );
 
+		// Light reaching the volume. `ambient` alone is a *constant* — so until
+		// this term existed the body colour was identical on every face of every
+		// wave, and the only thing that varied across the sea was the reflection,
+		// which Fresnel keeps down to two percent wherever you are looking down at
+		// the water. That is the whole reason the foreground read as a moving
+		// plane: the waves had shape but no shading.
+		//
+		// Sunlight refracts in, scatters, and comes back out, so the body follows
+		// the face's angle to the sun the same way a diffuse surface does. Written
+		// mean-preserving at nDotL = 0.5 so the ten authored presets keep their
+		// exposure and this only redistributes contrast across the wave.
+		const bodyLight = ambient.mul(
+			mix( float( 1.0 ), nDotL.add( 0.5 ), u.bodySunGain )
+		).toVar( 'bodyLight' );
+
 		// Volume colour = the authored deep/shallow gradient under direct light,
 		// plus upwelling scattered skylight. The second term is what ties the
 		// water's colour to the sky, so a preset change moves both together.
-		const volume = mix( u.waterShallow, u.waterDeep, depthNorm ).mul( ambient )
+		const volume = mix( u.waterShallow, u.waterDeep, depthNorm ).mul( bodyLight )
 			.mul( mix( vec3( 1.0 ), tint, gDeep ) )
 			.add( u.waterScatter.mul( skyLight ).mul( 0.80 ).mul( skyOcc ) )
 			.toVar( 'volume' );
@@ -554,8 +578,29 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 				relS.x.mul( sn ).add( relS.y.mul( c ) )
 			).div( u.vesselHalf );
 
-			const shade = oneMinus( smoothstep( 0.72, 1.15, length( shadeLocal ) ) ).mul( 0.34 ).toVar( 'hullShade' );
-			body.mulAssign( oneMinus( shade ) );
+			// Two separate occlusions, because they behave nothing alike and
+			// collapsing them into one multiply on `body` is what produced the
+			// near-black slab beside the hull.
+			//
+			// The sun is a small source: what it casts is a sharp-edged shadow,
+			// offset by the drop above, and inside it the specular highlight is
+			// simply gone. Killing that highlight is what actually reads as shade
+			// on water — far more than any darkening of the colour. The penumbra
+			// widens as the sun drops, because the shadow is then thrown further.
+			const soft = mix( float( 0.30 ), float( 1.05 ), saturate( oneMinus( u.sunDir.y.mul( 1.6 ) ) ) );
+			const sunOcc = oneMinus( smoothstep( float( 0.62 ), float( 0.62 ).add( soft ), length( shadeLocal ) ) )
+				.mul( 0.88 ).toVar( 'hullSunOcc' );
+			specular.mulAssign( oneMinus( sunOcc ) );
+
+			// The sky is a hemisphere, so the hull occludes it only for water it
+			// actually stands over, and only for the top of the column — light
+			// scattered out of the water below the hull never saw the sky through
+			// that solid angle in the first place. So this is soft, centred on the
+			// hull rather than offset, and weak. The old term was a hard-rimmed
+			// ellipse at 34%, which in an already-dark trough went to black and
+			// tracked the boat around as a slab.
+			const skyAO = oneMinus( smoothstep( 0.45, 1.32, hullD ) ).mul( 0.20 ).toVar( 'hullSkyAO' );
+			body.mulAssign( oneMinus( skyAO ) );
 
 		} );
 
@@ -691,10 +736,23 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 		).mul( foamFade ).toVar( 'foamMask' );
 
 		// Foam is lit, not painted white: it darkens in shadow and warms at sunset.
+		//
+		// It is also not flat. A whitecap is a few centimetres of bubbles over
+		// water, and light gets through the thin parts — so it has visible
+		// structure at a scale finer than the patch itself, and its shaded side
+		// picks up the colour of the water it is sitting on. A single uniform
+		// white fill is the difference between foam and a brush stroke, and at
+		// this size that read is most of what says "sea" rather than "render".
+		const bubble = foamFine.mul( 0.46 ).add( foamPatch.mul( 0.22 ) ).add( 0.60 ).toVar( 'foamBubble' );
+
 		const foamLit = u.foamColor.mul(
 			ambient.mul( 0.62 ).add( nDotL.mul( u.sunIntensity ).mul( 0.55 ) )
-		);
-		color.assign( mix( color, foamLit, foamMask ) );
+		).mul( bubble ).toVar( 'foamLit' );
+
+		// Thin foam is translucent. Blending toward the lit colour with a mask
+		// that is already the foam's own thickness gives the edges a wet, aerated
+		// look instead of the cut-out edge a straight replace produces.
+		color.assign( mix( color, mix( foamLit, mix( color, foamLit, 0.55 ), oneMinus( bubble ) ), foamMask ) );
 
 		/* --- underside (seen from below the water) --------------------- */
 

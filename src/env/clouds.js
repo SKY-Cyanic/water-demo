@@ -116,9 +116,16 @@ export function createCloudMarchFn( env, { cloudOctaves = 5, marchSteps = 20 } =
 
 					If( n.greaterThan( thr.sub( DETAIL_GAIN ) ), () => {
 
+						// Amplitude was half the gain, which left the skip bound
+						// conservative by a factor of two and — more to the point —
+						// barely eroded anything. A cumulus edge is *made* of this
+						// term: without it the profile ramp alone decides the
+						// silhouette, and the profile ramp is smooth, so every cloud
+						// came out as a rounded blob. At 0.95 of the gain the bound is
+						// tight rather than loose and the edge actually breaks up.
 						n.addAssign( mx_fractal_noise_float(
-							q.mul( 4.0 ).add( 31.7 ), cloudOctaves - 2, 2.0, 0.55
-						).mul( DETAIL_GAIN * 0.5 ) );
+							q.mul( 5.5 ).add( 31.7 ), cloudOctaves - 2, 2.0, 0.55
+						).mul( DETAIL_GAIN * 0.95 ) );
 
 					} );
 

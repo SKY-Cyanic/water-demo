@@ -223,7 +223,12 @@ class App {
 		// to attribute frame time to the march rather than to the rest of the scene,
 		// since at 1080p everything else sits under the vsync cap and is invisible.
 		const scaleParam = parseFloat( new URLSearchParams( location.search ).get( 'cloudscale' ) );
-		const cloudScale = Number.isFinite( scaleParam ) ? scaleParam : 0.4;
+		// 0.4 was chosen when a cloud was assumed to be a purely low-frequency
+		// object. It is not: the lit rim where the sun grazes a cumulus turret is
+		// a *sharp* feature, and at 0.4 it magnified into the soft cotton-wool
+		// blobs that were the weakest thing in every wide shot. 0.52 costs 1.7x
+		// the march and buys back the edge.
+		const cloudScale = Number.isFinite( scaleParam ) ? scaleParam : 0.40;
 
 		this.clouds = wantClouds && cloudScale > 0
 			? new CloudLayer( this.env, {

@@ -28,7 +28,7 @@ export const SCALAR_KEYS = [
 	// water optics
 	'waterClarity', 'absorptionR', 'absorptionG', 'absorptionB',
 	'roughness', 'sssStrength', 'reflectivity', 'varianceRough',
-	'volumeGeom', 'scatterStrength', 'groupStrength',
+	'volumeGeom', 'scatterStrength', 'groupStrength', 'bodySunGain',
 	// foam
 	'foamAmount', 'foamThreshold', 'foamPersistence', 'foamSharpness',
 	// underwater
@@ -112,6 +112,7 @@ export function defaultParams() {
 			volumeGeom: 1.0,
 			scatterStrength: 0.085,
 			groupStrength: 0.35,
+			bodySunGain: 0.60,
 			sssStrength: 1.0,        // back-lit wave crest translucency
 			reflectivity: 1.0,
 
@@ -207,6 +208,11 @@ export function createEnv() {
 		// together with absorption sets the single-scattering albedo.
 		volumeGeom: uniform( 1 ),
 		groupStrength: uniform( 0.35 ),
+
+		// How much the body colour is shaped by the sun's angle to the wave face.
+		// 0 restores the old behaviour, in which the volume was lit by two
+		// constants and every face of every wave came out the same colour.
+		bodySunGain: uniform( 0.60 ),
 		backscatter: uniform( new Vector3( 0.02, 0.05, 0.06 ) ),
 		waveHs: uniform( 1.8 ),
 		sssStrength: uniform( 1 ),
@@ -347,6 +353,7 @@ export function syncUniforms( env, dt = 0 ) {
 	u.varianceRough.value = p.varianceRough ?? 1;
 	u.volumeGeom.value = p.volumeGeom ?? 1;
 	u.groupStrength.value = p.groupStrength ?? 0.35;
+	u.bodySunGain.value = p.bodySunGain ?? 0.60;
 	u.waveHs.value = Math.max( 0.05, p.waveHeight );
 
 	// Backscatter shares the scatter colour's chromaticity — they describe the
