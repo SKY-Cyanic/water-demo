@@ -1,7 +1,7 @@
 {
 	"command": "strip",
 	"origin": "http://localhost:8173",
-	"startedAt": "2026-08-01T03:01:55.674Z",
+	"startedAt": "2026-08-01T03:58:12.309Z",
 	"userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
 	"strips": [
 		"qa-motion-wide.png",
@@ -9,6 +9,6 @@
 		"qa-motion-storm.png",
 		"qa-motion-vessel.png"
 	],
-	"finishedAt": "2026-08-01T03:02:13.334Z",
+	"finishedAt": "2026-08-01T03:58:29.530Z",
 	"ok": true
 }

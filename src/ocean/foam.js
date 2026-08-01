@@ -20,7 +20,7 @@
 // in the same pass.
 
 import { HalfFloatType, LinearFilter, Mesh, MeshBasicNodeMaterial, OrthographicCamera, PlaneGeometry, RGBAFormat, RenderTarget, Scene, Vector2 } from 'three/webgpu';
-import { Fn, If, abs, exp, float, length, max, min, oneMinus, saturate, smoothstep, step, texture, uniform, uv, vec2, vec3, vec4 } from 'three/tsl';
+import { Fn, If, abs, exp, float, length, max, min, oneMinus, saturate, smoothstep, step, texture, uniform, uv, vec2, vec4 } from 'three/tsl';
 
 import { createWaveEvaluator, foamFromJacobian } from './waves.js';
 
@@ -71,6 +71,7 @@ export class FoamHistory {
 		this.uPrevOrigin = uniform( new Vector2() );
 		this.uWindow = uniform( this.window );
 		this.uDecay = uniform( 0.99 );
+		this.uWakeDecay = uniform( 0.99 );          // the hull's churn, on its own clock
 		this.uAdvect = uniform( new Vector2() );      // world-space drift this frame
 		this.uSourceGain = uniform( 1 );
 
@@ -121,7 +122,10 @@ export class FoamHistory {
 			const inside = step( 0.0, prevUV.x ).mul( step( prevUV.x, 1.0 ) )
 				.mul( step( 0.0, prevUV.y ) ).mul( step( prevUV.y, 1.0 ) );
 
-			const carried = this.prevTexture.sample( prevUV ).r.mul( inside ).mul( this.uDecay ).toVar( 'foamCarried' );
+			const prev = this.prevTexture.sample( prevUV ).toVar( 'foamPrev' );
+
+			const carried = prev.r.mul( inside ).mul( this.uDecay ).toVar( 'foamCarried' );
+			const carriedWake = prev.g.mul( inside ).mul( this.uWakeDecay ).toVar( 'wakeCarried' );
 
 			/* --- fresh foam from the crest mask -------------------------- */
 
@@ -181,11 +185,25 @@ export class FoamHistory {
 
 			/* --- the vessel's wake, laid into the world ------------------ */
 
-			// This is the whole point of putting it here rather than in the surface
-			// shader. A wake drawn in the hull's frame is rigidly attached to the
-			// boat and reads as a white tail being towed; deposited into the history
-			// it stays where the water was disturbed, decays on the buffer's own
-			// clock, and drifts downwind with everything else.
+			// A wake drawn in the hull's frame is rigidly attached to the boat and
+			// reads as a white tail being towed, so it is deposited into the world
+			// here instead — but into its *own channel*, on its own clock.
+			//
+			// Sharing `.r` with the whitecaps was the reason a hard white V kept
+			// trailing her. The whitecap lifetime is `0.2 + persistence^2 * 42`,
+			// which the presets set to 21 s on Open Sea and 34 s on Storm Front —
+			// correct for a foam raft left by a breaking crest, which is what it was
+			// written for. At 1.55 m/s that is 32 to 53 metres of trail, deposited
+			// at saturation, on top of the 26 m the paint window covered anyway. It
+			// was not a tuning error: a hull's churn and a breaking crest are
+			// different processes and there was only one time constant between them.
+			//
+			// Bubbles entrained by a displacement hull surface and burst in under ten
+			// seconds. So the wake gets ~8 s, the paint window is pulled in to the
+			// water actually being worked, and the length that comes out is speed
+			// times lifetime rather than a number chosen to look right.
+			const wake = float( 0 ).toVar( 'wakeSource' );
+
 			If( u.vesselMix.greaterThan( 0.001 ), () => {
 
 				const rel = worldXZ.sub( u.vesselPos.xz ).toVar( 'wakeRel' );
@@ -199,24 +217,28 @@ export class FoamHistory {
 				const across = abs( local.x ).toVar( 'wAcross' );
 
 				// Kelvin arms at the fixed half-angle, plus the churn between them.
-				// Only the freshly disturbed water is written; the buffer's decay
-				// does the rest, so there is no length constant to tune here.
 				const arm = exp( abs( across.sub( astern.mul( 0.354 ) ) ).mul( - 1.9 ) );
 				const trail = exp( across.div( astern.mul( 0.16 ).add( 1.6 ) ).mul( - 2.2 ) );
 
-				const fresh = smoothstep( 0.0, 3.0, astern ).mul( oneMinus( smoothstep( 4.0, 26.0, astern ) ) );
+				// Only where the hull is actually working the water. Past a boat
+				// length astern nothing new is being aerated — what is there is what
+				// was left behind, and that is the decay's business, not the brush's.
+				const fresh = smoothstep( 0.0, 2.0, astern ).mul( oneMinus( smoothstep( 3.0, 14.0, astern ) ) );
 
-				source.assign( max( source,
-					arm.mul( 0.85 ).add( trail.mul( 0.5 ) ).mul( fresh ).mul( u.vesselSpeed )
-				) );
+				// Deposited below saturation. At 0.85 the arms landed at 1.0 after
+				// the clamp, so the trail started at full white and had a long way to
+				// fall before it dropped under the foam threshold at all — which is
+				// what made it read as a painted line rather than as disturbed water.
+				wake.assign( arm.mul( 0.58 ).add( trail.mul( 0.34 ) ).mul( fresh ).mul( u.vesselSpeed ) );
 
 			} );
 
 			// max(), not add(): foam saturates. Adding would let a persistent
 			// crest run away to a hard white slab.
 			const result = max( carried, source ).toVar( 'foamResult' );
+			const wakeResult = max( carriedWake, wake ).toVar( 'wakeResult' );
 
-			return vec4( vec3( saturate( result ) ), 1.0 );
+			return vec4( saturate( result ), saturate( wakeResult ), 0.0, 1.0 );
 
 		} )();
 
@@ -251,7 +273,8 @@ export class FoamHistory {
 			min( smoothstep( 0.0, 0.06, uvNode.y ), smoothstep( 1.0, 0.94, uvNode.y ) )
 		);
 
-		return this.historyTexture.sample( saturate( uvNode ) ).r.mul( edge );
+		const h = this.historyTexture.sample( saturate( uvNode ) ).toVar( 'foamHist' );
+		return max( h.r, h.g ).mul( edge );
 
 	}
 
@@ -280,6 +303,11 @@ export class FoamHistory {
 		const lifetime = 0.20 + p.foamPersistence * p.foamPersistence * 42;
 		this.uDecay.value = Math.exp( - dt / lifetime );
 
+		// The wake's own clock. Entrained air surfaces and bursts in well under ten
+		// seconds regardless of what the sea state is doing to breaking crests, so
+		// this is a constant rather than another preset knob.
+		this.uWakeDecay.value = Math.exp( - dt / 8.0 );
+
 		this.uSourceGain.value = p.foamPersistence > 0 ? 1 : 0;
 
 		const write = this.targets[ this.read ];
@@ -294,6 +322,7 @@ export class FoamHistory {
 			this.uPrevOrigin.value.copy( this.uOrigin.value );
 			this.uAdvect.value.set( 0, 0 );
 			this.uDecay.value = 0;
+			this.uWakeDecay.value = 0;
 			this._first = false;
 
 		}

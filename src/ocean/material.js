@@ -664,41 +664,19 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 			// the hull is unmistakably a drawn outline; aeration is patchy.
 			const torn = foamFine.mul( 0.55 ).add( foamPatch.mul( 0.45 ) ).add( 0.30 );
 
-			/* --- wake ---------------------------------------------------- */
-
-			// Metres astern of the transom, and metres off the track.
-			const astern = max( hullLocalOut.y.negate().sub( u.vesselHalf.y.mul( 0.75 ) ), float( 0.0 ) ).toVar( 'wakeAstern' );
-			const across = abs( hullLocalOut.x ).toVar( 'wakeAcross' );
-
-			// The two Kelvin arms sit on a fixed half-angle from the track — about
-			// 19.5 degrees for any displacement hull at any speed, which is why a
-			// wake is recognisable at all. They are the shape; the centre trail is
-			// just churn, so it spreads and fades much faster.
-			const arm = exp( abs( across.sub( astern.mul( 0.354 ) ) ).mul( - 1.9 ) );
-			const trail = exp( across.div( astern.mul( 0.16 ).add( 1.6 ) ).mul( - 2.2 ) );
-
-			// Three knots is a modest wake. The first pass poured a solid white
-			// river down the arms because the amount fed straight past the foam
-			// mask's upper threshold and saturated — everything above 0.70 looks
-			// identical, so the whole trail flattened into one shape with no edge.
-			// A wake dissipates. The old length scale left a hard white line running
-			// off to the horizon behind her, which reads as painted-on rather than as
-			// water closing over a hull. It also tears apart as it ages, so the noise
-			// takes over from the shape with distance astern.
-			const age = saturate( astern.mul( 0.022 ) ).toVar( 'wakeAge' );
-			const decay = exp( astern.mul( - 0.10 ) ).mul( smoothstep( 0.0, 3.0, astern ) )
-				.mul( mix( float( 1.0 ), foamFine.mul( 1.6 ).sub( 0.55 ), age ) );
-			const wake = arm.mul( 0.42 ).add( trail.mul( 0.26 ) ).mul( decay ).mul( u.vesselSpeed ).toVar( 'wake' );
-
 			// Bow wave. A hull pushing water has a bright, hard shoulder ahead of the
 			// stem — brighter than anything in the wake, because the water there is
-			// being lifted and aerated rather than merely disturbed.
+			// being lifted and aerated rather than merely disturbed. This is the only
+			// part of the boat's foam that belongs in the hull's frame, because it is
+			// the only part that is genuinely a function of where the hull is *now*.
 			//
-			// The *wake* is not drawn here any more. Drawn in the hull's frame it was
-			// rigidly attached to the boat — a white tail towed along behind her
-			// rather than a disturbance left in the water. It is deposited into the
-			// world-space foam history instead, where it stays put and decays, which
-			// is what a wake actually does.
+			// The wake is deposited into the world-space foam history instead. The
+			// previous version of this block still computed the whole Kelvin figure
+			// here — arms, centre trail, an age-driven decay — and then never used it.
+			// Dead ALU on every pixel near the boat, and worse, it read as though the
+			// surface shader were still responsible for the wake, which sent me back
+			// to it twice while looking for the trailing white lines.
+			const across = abs( hullLocalOut.x ).toVar( 'wakeAcross' );
 			const ahead = max( hullLocalOut.y.sub( u.vesselHalf.y.mul( 0.55 ) ), float( 0.0 ) ).toVar( 'bowAhead' );
 			const bow = exp( abs( across.sub( ahead.mul( 0.62 ).add( 0.9 ) ) ).mul( - 2.2 ) )
 				.mul( oneMinus( smoothstep( 0.0, 5.5, ahead ) ) )
