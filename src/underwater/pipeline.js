@@ -10,23 +10,51 @@
 //   * A weak refractive wobble, driven by the same clock as the waves.
 //   * Ambient light falling off with the viewer's own depth.
 //
-// Note what is deliberately *not* here: caustics. An earlier version projected
-// them in this pass, which needed the world position reconstructed from depth —
-// and that reconstruction depends on clip-space and screen-UV conventions that
-// differ between the WebGPU and WebGL backends. Worse, it was a duplicate: the
-// seabed material already casts caustics in world space, correctly, and open
-// water has no bottom for them to land on. Removing them from here deleted the
-// bug and improved the result.
+// Note what *is* here now: marched light shafts. An earlier version projected
+// caustics in this pass and was removed because the seabed already casts them
+// in world space and open water has no bottom for them to land on — both still
+// true. Shafts are a different thing: they are the volume between the eye and
+// the surface, which no surface material can draw. See the march below.
+//
+// The warning that came with removing them still stands and the shafts had to
+// face it: reconstructing world position from depth depends on clip-space and
+// screen-UV conventions that differ between the WebGPU and WebGL backends. The
+// march below does reconstruct it, so `?forcewebgl=1` is part of its test.
 //
 // The pass only runs while the camera is near or under the surface; above water
 // the renderer draws straight to the canvas at no post cost at all.
 
 import { RenderPipeline, Vector2 } from 'three/webgpu';
 import {
-	Fn, If, abs, dot, exp, float, floor, fract, max, min, mix, mx_fractal_noise_float, oneMinus,
+	Fn, If, abs, cameraProjectionMatrixInverse, cameraWorldMatrix, dot, exp, float, floor, fract,
+	max, min, mix, mx_fractal_noise_float, normalize, oneMinus,
 	pass, pow, rtt, saturate, screenSize, screenUV, sin, smoothstep, step, uniform,
 	vec2, vec3, vec4,
 } from 'three/tsl';
+
+/** Raymarch steps for the light shafts. */
+const SHAFT_STEPS = 6;
+
+/**
+ * The field a light shaft is cut from.
+ *
+ * Deliberately *not* `causticPattern`. Sharing that function was the obvious
+ * thing to do — the shafts and the seabed should be lit by the same waves — but
+ * it costs two Worley lookups per evaluation, and a march is many evaluations
+ * per pixel. Fourteen steps of it put the underwater view at 14.7 fps.
+ *
+ * A shaft does not need cells. It needs a smooth field whose zero set is a
+ * family of wandering curves, because that is the topology of a caustic fold,
+ * and a ridged two-octave fBm gives exactly that for a fraction of the cost.
+ * Eighteen-metre features, so the beams come out metres wide, which is what
+ * they are.
+ */
+const shaftField = /*@__PURE__*/ Fn( ( [ p, time ] ) => {
+
+	const n = mx_fractal_noise_float( vec3( p.mul( 0.055 ), time.mul( 0.16 ) ), 2, 2.0, 0.5 );
+	return pow( oneMinus( abs( n ) ), 4.0 );
+
+} );
 
 export class UnderwaterPipeline {
 
@@ -101,6 +129,128 @@ export class UnderwaterPipeline {
 			const upGlow = smoothstep( 0.40, 1.0, oneMinus( screenUV.y ) )
 				.mul( depthFade ).mul( u.sunIntensity ).mul( 0.12 );
 			fogged.addAssign( u.uwTint.mul( upGlow ) );
+
+			/* --- light shafts ------------------------------------------ */
+
+			// A light shaft is not a decorative streak: it is the caustic pattern on
+			// the surface, extruded downward along the sun's direction and made
+			// visible by the particles it scatters off. So it is marched, and it is
+			// marched against the *same* caustic function the seabed is lit by —
+			// which is the only way the shafts land where the bright patches on the
+			// bottom are, and move with the same waves.
+			//
+			// The whole block is inside a branch on `uwFactor`, which is a uniform.
+			// The branch is coherent across the draw and costs nothing above water,
+			// where this pass is skipped outright anyway.
+			//
+			// `?noshafts=1` drops the march. There is no other way to attribute
+			// frame time to it: two back-to-back runs of *this* file gave 38.6 fps
+			// at eight steps and 31.9 at six, which is thermal drift swamping the
+			// thing being measured. A switch that removes exactly one term, toggled
+			// inside one session, is the only measurement that means anything.
+			const wantShafts = new URLSearchParams( location.search ).get( 'noshafts' ) !== '1';
+
+			If( factor.greaterThan( wantShafts ? 0.01 : 1e9 ), () => {
+
+				// World-space view ray. The inverse projection gives a point on the
+				// ray in view space; scaling it to z = -1 turns it into a direction
+				// per unit of view depth, which is what `dist` is measured in.
+				const ndc = vec3( screenUV.mul( 2.0 ).sub( 1.0 ), 0.0 ).toVar( 'uwNdc' );
+				const h = cameraProjectionMatrixInverse.mul( vec4( ndc, 1.0 ) ).toVar( 'uwRayH' );
+				const vRay = h.xyz.div( h.w ).toVar( 'uwRayView' );
+				const vDir = vRay.div( max( vRay.z.negate(), float( 1e-4 ) ) ).toVar( 'uwRayDir' );
+
+				const camW = cameraWorldMatrix.mul( vec4( 0.0, 0.0, 0.0, 1.0 ) ).xyz.toVar( 'uwCamW' );
+				const farW = cameraWorldMatrix.mul( vec4( vDir.mul( 1.0 ), 1.0 ) ).xyz.toVar( 'uwFarW' );
+				const rayW = normalize( farW.sub( camW ) ).toVar( 'uwRayW' );
+
+				// The step is a *fixed* distance, and the scene depth occludes samples
+				// rather than setting the step size.
+				//
+				// Scaling the step by `dist` was the first thing I tried and it does
+				// not work at all: seen from below, the distance to the surface is
+				// itself a radial function of screen position, so every sample landed
+				// on a radially scaled coordinate and the whole frame came out as a
+				// starburst converging on the camera's own axis. Any march whose step
+				// is proportional to a screen-radial quantity has this failure, and it
+				// looks like a rendering effect rather than like a bug, which is why
+				// it is worth writing down.
+				const span = min( u.uwVisibility, float( 55.0 ) ).toVar( 'uwSpan' );
+				const step_ = span.div( SHAFT_STEPS ).toVar( 'uwStep' );
+
+				// Six steps over fifty metres is nine-metre banding. Offsetting each
+				// ray by a fraction of a step turns the bands into noise that the
+				// neighbouring pixels average out — the same reason the cloud march
+				// does it, and the same low-discrepancy sequence.
+				const jitter = fract( float( 52.9829189 ).mul( fract(
+					screenUV.x.mul( screenSize.x ).mul( 0.06711056 )
+						.add( screenUV.y.mul( screenSize.y ).mul( 0.00583715 ) )
+				) ) ).toVar( 'uwJitter' );
+
+				const shaft = float( 0.0 ).toVar( 'uwShaft' );
+
+				for ( let i = 0; i < SHAFT_STEPS; i ++ ) {
+
+					const t = step_.mul( jitter.add( i ) ).toVar( `uwT${ i }` );
+					const p = camW.add( rayW.mul( t ) ).toVar( `uwP${ i }` );
+
+					// Nothing behind the first surface the scene pass recorded is in
+					// the water any more. Faded over one step rather than cut: a hard
+					// test makes the *number* of contributing samples a function of
+					// scene depth, and scene depth seen from under a plane is smooth
+					// and radial, so the cut traced its own contours across the frame.
+					const visible = saturate( dist.sub( t ).div( step_ ) );
+
+					// A sample that has left the water scatters nothing.
+					//
+					// Both terms below clamp the depth at zero, which meant every
+					// above-surface sample got rise = 0 and down = 1 — the *maximum*
+					// contribution — instead of none. The locus where the ray crosses
+					// y = 0 therefore carried a crease, and since that locus passes
+					// through the camera axis it drew a fold converging on the middle
+					// of the frame in every underwater shot. The clamps are still
+					// needed to keep the exponentials finite; what was missing is that
+					// clamping a quantity is not the same as excluding the sample.
+					const wet = saturate( p.y.negate().mul( 2.0 ) ).toVar( `uwWet${ i }` );
+
+					// Walk from this sample up the sun's own direction to where it
+					// pierces the mean surface. That intersection is where the water
+					// focused the light that is passing through here.
+					const rise = max( p.y.negate(), float( 0.0 ) )
+						.div( max( u.sunDir.y, float( 0.12 ) ) );
+					const surf = p.xz.add( u.sunDir.xz.mul( rise ) );
+
+					// Attenuated twice: down from the surface to this depth, and back
+					// along the view ray to the eye. Both are already one exponential
+					// each, so this is the whole of it.
+					const down = exp( max( p.y.negate(), float( 0.0 ) ).mul( - 0.055 ) );
+					const back = exp( t.mul( ext.g ).negate() );
+
+					shaft.addAssign(
+						shaftField( surf, u.time )
+							.mul( down ).mul( back ).mul( visible ).mul( wet )
+					);
+
+				}
+
+				// Only the part of the sky's light that is still travelling in a beam
+				// scatters into a visible shaft; a low sun spreads it out into general
+				// murk. Divided by the step count so the brightness does not depend on
+				// how finely the ray happened to be sampled.
+				const beam = saturate( u.sunDir.y.mul( 2.2 ) ).mul( u.sunIntensity );
+
+				// A beam is seen by the light it scatters sideways, so it is brightest
+				// across the sun and nearly invisible looking straight down it.
+				const across = oneMinus( abs( dot( rayW, u.sunDir ) ) ).toVar( 'uwAcross' );
+
+				fogged.addAssign(
+					u.uwTint.mul( u.sunColor ).mul(
+						shaft.div( SHAFT_STEPS ).mul( beam ).mul( depthFade )
+							.mul( across.mul( 0.7 ).add( 0.3 ) ).mul( 1.15 )
+					)
+				);
+
+			} );
 
 			// Slight desaturation toward the medium at the frame edges, standing in
 			// for the wider scattering angle off-axis.

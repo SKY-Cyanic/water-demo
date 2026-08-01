@@ -423,7 +423,7 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 			// by the same scattering that limits visibility. Without this term they
 			// were painted at full strength onto every depth, and a lagoon lit at noon
 			// blew the whole frame to cream.
-			const caustic = causticPattern( bedPoint.xz, u.time )
+			const caustic = causticPattern( bedPoint.xz, u.time, float( 1.15 ) )
 				.mul( u.causticStrength )
 				.mul( exp( waterDepth.mul( - 0.11 ) ) )
 				.mul( saturate( u.sunDir.y.mul( 2.0 ) ) )

@@ -24,10 +24,12 @@ import {
 	MeshBasicNodeMaterial,
 } from 'three/webgpu';
 import {
-	Fn, abs, attribute, cameraPosition, cross, dot, faceDirection, float, floor, fract, max, min,
+	Fn, abs, attribute, cameraPosition, cross, dot, exp, faceDirection, float, floor, fract, max, min,
 	mix, mx_fractal_noise_float, normalLocal, normalize, oneMinus, positionGeometry, positionWorld,
 	pow, saturate, sin, smoothstep, step, texture, varyingProperty, vec2, vec3, vec4,
 } from 'three/tsl';
+
+import { causticPattern } from '../ocean/shading.js';
 
 /* ------------------------------------------------------------------ shapes */
 
@@ -759,8 +761,19 @@ export class Vessel {
 			paint.mulAssign( mix( float( 1.0 ), float( 0.58 ), wet ) );
 
 			// Anything below the waterline is seen through the water column.
+			//
+			// The floor matters. Antifouling is very dark paint, and multiplying it
+			// by the water tint crushed every bit of variation out of it — from
+			// below, the hull rendered as a flat black hole cut in the water with no
+			// shape at all. Underwater there is no such thing as a surface darker
+			// than the water in front of it: the column between you and it scatters
+			// light in, and that sets a floor no albedo can go under.
 			const submerged = smoothstep( 0.10, - 0.55, vLocalY ).toVar( 'vesSub' );
-			paint.assign( mix( paint, paint.mul( u.waterShallow ).mul( 1.9 ), submerged ) );
+			paint.assign( mix(
+				paint,
+				max( paint, vec3( 0.06 ) ).mul( u.waterShallow ).mul( 2.6 ),
+				submerged
+			) );
 
 			const skyLight = mix( u.skyHorizon, u.skyZenith, 0.42 ).toVar( 'vesSky' );
 
@@ -788,6 +801,23 @@ export class Vessel {
 			const lit = paint.mul(
 				u.sunColor.mul( sunSq.mul( u.sunIntensity ).mul( 1.30 ) ).add( hemi )
 			).toVar( 'vesLit' );
+
+			// Caustics on the planking below the waterline. Light the surface has
+			// focused dances on everything under it, and it is the one cue that
+			// reads as "this object is *in* the water" rather than "this object is
+			// behind a blue filter". The same function the seabed is lit by, so the
+			// bright patches on the hull and on the bottom belong to the same waves.
+			const caustic = causticPattern( positionWorld.xz, u.time, float( 1.15 ) )
+				.mul( exp( max( positionWorld.y.negate(), float( 0.0 ) ).mul( - 0.22 ) ) )
+				.mul( saturate( u.sunDir.y.mul( 2.0 ) ) )
+				.mul( submerged )
+				.toVar( 'vesCaustic' );
+
+			lit.addAssign(
+				u.sunColor.mul( u.waterShallow )
+					.mul( min( caustic, float( 1.5 ) ) )
+					.mul( u.sunIntensity ).mul( 0.85 )
+			);
 
 			// The gloss the wet band buys: a tight lobe toward the sun, present only
 			// where the paint is wet.

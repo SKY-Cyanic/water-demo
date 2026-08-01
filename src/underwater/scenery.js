@@ -59,7 +59,7 @@ export class Seabed {
 			// scattering that limits visibility.
 			const depth = u.seabedY.add( seabedHeight( p ) ).negate().toVar( 'bedDepth' );
 
-			const caustic = causticPattern( p, u.time )
+			const caustic = causticPattern( p, u.time, float( 1.15 ) )
 				.mul( u.causticStrength )
 				.mul( exp( depth.mul( - 0.11 ) ) )
 				.mul( saturate( u.sunDir.y.mul( 2.0 ) ) )

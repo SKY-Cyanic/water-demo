@@ -1,7 +1,7 @@
 {
 	"command": "perf",
 	"origin": "http://localhost:8173",
-	"startedAt": "2026-08-01T03:24:21.455Z",
+	"startedAt": "2026-08-01T04:26:03.862Z",
 	"userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
 	"perf": [
 		{
@@ -17,13 +17,13 @@
 			"underwater": false,
 			"label": "1920x1080 high",
 			"seconds": 12,
-			"frames": 611,
-			"avgFps": 50.9,
-			"avgMs": 19.64,
+			"frames": 599,
+			"avgFps": 50,
+			"avgMs": 20.01,
 			"medianMs": 16.7,
-			"p95Ms": 33.3,
-			"onePercentLowFps": 29.9,
-			"worstMs": 34.1
+			"p95Ms": 33.4,
+			"onePercentLowFps": 29.6,
+			"worstMs": 34.3
 		},
 		{
 			"backend": "WebGPU",
@@ -42,9 +42,9 @@
 			"avgFps": 60,
 			"avgMs": 16.67,
 			"medianMs": 16.7,
-			"p95Ms": 16.8,
-			"onePercentLowFps": 56.8,
-			"worstMs": 17.8
+			"p95Ms": 16.9,
+			"onePercentLowFps": 57.1,
+			"worstMs": 17.7
 		},
 		{
 			"backend": "WebGPU",
@@ -59,11 +59,11 @@
 			"underwater": false,
 			"label": "1920x1080 high storm",
 			"seconds": 12,
-			"frames": 638,
-			"avgFps": 53.2,
-			"avgMs": 18.81,
+			"frames": 636,
+			"avgFps": 53.1,
+			"avgMs": 18.84,
 			"medianMs": 16.7,
-			"p95Ms": 33.3,
+			"p95Ms": 33.4,
 			"onePercentLowFps": 29.9,
 			"worstMs": 34.2
 		},
@@ -80,7 +80,7 @@
 			"underwater": false,
 			"label": "1920x1080 low storm",
 			"seconds": 12,
-			"frames": 720,
+			"frames": 721,
 			"avgFps": 60,
 			"avgMs": 16.67,
 			"medianMs": 16.7,
@@ -100,14 +100,14 @@
 			"preset": "open-sea",
 			"underwater": false,
 			"label": "3840x2160 ultra (headroom probe)",
-			"seconds": 12,
-			"frames": 170,
-			"avgFps": 14.2,
-			"avgMs": 70.59,
-			"medianMs": 66.7,
-			"p95Ms": 83.3,
-			"onePercentLowFps": 12,
-			"worstMs": 84.1
+			"seconds": 12.01,
+			"frames": 159,
+			"avgFps": 13.2,
+			"avgMs": 75.69,
+			"medianMs": 82.3,
+			"p95Ms": 84.3,
+			"onePercentLowFps": 10,
+			"worstMs": 101
 		},
 		{
 			"backend": "WebGPU",
@@ -122,15 +122,15 @@
 			"underwater": true,
 			"label": "1920x1080 high underwater",
 			"seconds": 12,
-			"frames": 589,
-			"avgFps": 49.1,
-			"avgMs": 20.37,
-			"medianMs": 16.7,
-			"p95Ms": 33.4,
-			"onePercentLowFps": 29.9,
-			"worstMs": 34
+			"frames": 350,
+			"avgFps": 29.2,
+			"avgMs": 34.29,
+			"medianMs": 33.3,
+			"p95Ms": 50,
+			"onePercentLowFps": 20,
+			"worstMs": 50.8
 		}
 	],
-	"finishedAt": "2026-08-01T03:26:00.673Z",
+	"finishedAt": "2026-08-01T04:27:43.532Z",
 	"ok": true
 }

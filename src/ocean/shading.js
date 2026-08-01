@@ -93,13 +93,17 @@ export const rippleSlope = /*@__PURE__*/ Fn( ( [ p, time, wind, strength, dist ]
  *
  * @param {Node<vec2>}  p      world XZ of the lit surface
  * @param {Node<float>} time
+ * @param {Node<float>} scale  cells per metre. ~1.15 for a surface being lit;
+ *                             much coarser for a volume integral, which cannot
+ *                             afford enough steps to resolve the fine web and
+ *                             would alias it into a woven mess if it tried.
  * @returns {Node<float>} 0..~1 caustic intensity
  */
-export const causticPattern = /*@__PURE__*/ Fn( ( [ p, time ] ) => {
+export const causticPattern = /*@__PURE__*/ Fn( ( [ p, time, scale ] ) => {
 
 	// Cells were 2.4 m across, which is a caustic the size of a dinner table.
 	// On a bottom a few metres down the web is finer than a pace.
-	const q = p.mul( 1.15 ).toVar();
+	const q = p.mul( scale ).toVar();
 	const t = time.mul( 0.42 ).toVar();
 
 	const w1 = mx_worley_noise_float( q.add( vec2( t.mul( 0.21 ), t.mul( - 0.13 ) ) ), 1.0, 1 ).toVar();
