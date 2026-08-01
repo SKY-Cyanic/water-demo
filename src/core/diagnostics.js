@@ -283,7 +283,7 @@ export function installQAHooks( app ) {
 		if ( patch.vesselHove !== undefined && app.vessel ) {
 
 			app.vessel.hove = !! patch.vesselHove;
-			if ( patch.vesselHove ) app.vessel._travel = 0;
+			if ( patch.vesselHove ) app.vessel.rewind();
 
 		}
 

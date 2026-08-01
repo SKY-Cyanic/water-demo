@@ -1,15 +1,15 @@
 {
 	"command": "smoke",
 	"origin": "http://localhost:8173",
-	"startedAt": "2026-07-31T14:12:39.559Z",
+	"startedAt": "2026-08-01T01:22:08.618Z",
 	"userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
 	"smoke": {
 		"state": {
 			"backend": "WebGPU",
 			"quality": "high",
 			"preset": "open-sea",
-			"fps": 59.9,
-			"frameMs": 16.7,
+			"fps": 59.4,
+			"frameMs": 16.84,
 			"onePercentLow": 0,
 			"viewport": "1920x1080",
 			"devicePixelRatio": 1,
@@ -24,6 +24,6 @@
 		"pageErrors": [],
 		"appErrors": []
 	},
-	"finishedAt": "2026-07-31T14:12:40.904Z",
+	"finishedAt": "2026-08-01T01:22:10.111Z",
 	"ok": true
 }

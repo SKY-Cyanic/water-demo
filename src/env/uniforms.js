@@ -192,6 +192,7 @@ export function createEnv() {
 		vesselDir: uniform( new Vector2( 1, 0 ) ),        // (cos, sin) of the heading
 		vesselMix: uniform( 0 ),                          // 0 when no vessel is present
 		vesselSpeed: uniform( 0 ),                        // 0..1, how hard she is pushing a wake
+		vesselHeel: uniform( 0 ),                         // lee heel, as a slope
 
 		/* underwater */
 		uwTint: uniform( new Color() ),

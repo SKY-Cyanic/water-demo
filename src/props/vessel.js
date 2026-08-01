@@ -49,6 +49,9 @@ const SINK = 1.35;
  */
 const PART = { hull: 0, deck: 2, cabin: 3, spar: 4, sail: 5, wire: 6 };
 
+/** Metres per second. About three knots. */
+const SPEED = 1.55;
+
 /** How far she may drift from the viewer before wrapping to the other side. */
 const LATTICE = 900;
 
@@ -508,11 +511,6 @@ export class Vessel {
 
 		const geometry = buildGeometry();
 
-		// Bake the heading in. The hull never turns, so rotating on the CPU once
-		// keeps the vertex program to a single basis transform — and lets the
-		// water's contact terms use one world-space ellipse instead of a rotation.
-		geometry.rotateY( heading );
-		geometry.computeVertexNormals();
 
 		this.material = this._buildMaterial( spectral );
 
@@ -525,17 +523,25 @@ export class Vessel {
 		// The half-extents are the hull's, not the rig's — a mast twelve metres up
 		// does not have a waterline.
 		env.u.vesselPos.value.set( anchor[ 0 ], 0, anchor[ 1 ] );
-		env.u.vesselHalf.value.set( BEAM / 2 - 0.05, ( LENGTH_AFT + LENGTH_FWD ) / 2 - 0.6 );
+		// The collar is drawn where this ellipse crosses 1, so it has to sit just
+		// *outside* the planking. Sized to the hull exactly, it fell under the hull
+		// for most of its length — an ellipse is narrower than a boat everywhere
+		// except amidships — and the waterline foam simply vanished from view.
+		env.u.vesselHalf.value.set( BEAM / 2 + 0.40, ( LENGTH_AFT + LENGTH_FWD ) / 2 + 0.5 );
 		env.u.vesselDir.value.set( Math.cos( heading ), Math.sin( heading ) );
 		env.u.vesselSpeed.value = 1;
 
 		// Bow direction in world XZ. rotateY(h) maps the hull's +Z to this.
-		this._bow = [ Math.sin( heading ), Math.cos( heading ) ];
-		this._travel = 0;
+		this._baseHeading = heading;
+		this._heading = heading;
+		this._pos = [ anchor[ 0 ], anchor[ 1 ] ];
+		this._t = 0;
 
 		// QA holds her still so the fixed inspection views stay repeatable. The
 		// wake uniform is untouched, so the shots still show it.
 		this.hove = false;
+
+		env.u.vesselHeel.value = 0.05;
 
 	}
 
@@ -557,76 +563,103 @@ export class Vessel {
 
 		material.positionNode = Fn( () => {
 
-			// Live, because she sails. A baked constant would have pinned the hull
-			// while the wake and the waterline foam — which read the uniform —
-			// walked away from her.
 			const anchor = u.vesselPos.xz.toVar( 'vesAnchor' );
 
-			const disp = vec3( 0, 0, 0 ).toVar( 'vesDisp' );
-			const slope = vec2( 0, 0 ).toVar( 'vesSlope' );
+			// Live heading, so she can steer. It used to be baked into the geometry
+			// with rotateY(), which is cheaper but means the boat can only ever go
+			// one way — and a wake that never bends is the thing that gives away
+			// that nothing is being simulated.
+			const hc = u.vesselDir.x, hs = u.vesselDir.y;
+			const bowDir = vec2( hs, hc ).toVar( 'vesBow' );
+			const stbdDir = vec2( hc, hs.negate() ).toVar( 'vesStbd' );
 
-			if ( spectral ) {
+			const waterAt = ( xz ) => {
 
-				// Longest cascade only. A hull fifteen metres long averages over
-				// everything shorter than itself; feeding it the chop cascades makes
-				// it twitch like a cork, which is the single most common way a
-				// floating object in a demo gives itself away.
-				const uvw = anchor.div( spectral.sizes[ 0 ] );
-				disp.assign( texture( spectral.disp[ 0 ], uvw, float( 0 ) ).xyz );
-				slope.assign( texture( spectral.slope[ 0 ], uvw, float( 0 ) ).xy.mul( 0.55 ) );
-
-			}
-
-			const normal = normalize( vec3( slope.x.negate(), 1.0, slope.y.negate() ) ).toVar( 'vesN' );
-
-			const ref = vec3( 0.0, 0.0, 1.0 );
-			const tangent = normalize( cross( ref, normal ) ).toVar( 'vesT' );
-			const bitangent = cross( normal, tangent ).toVar( 'vesB' );
-
-			const p = positionGeometry;
-			const tilted = tangent.mul( p.x ).add( normal.mul( p.y ) ).add( bitangent.mul( p.z ) );
-
-			const world = vec3( anchor.x, 0.0, anchor.y ).add( disp ).add( tilted ).toVar( 'vesWorld' );
-
-			if ( spectral ) {
-
-				// Soft hull.
-				//
-				// A rigid body placed against a single wave sample is wrong along its
-				// own length: the swell under the bow is routinely half a metre from
-				// the swell under the stern, and the error shows up as daylight under
-				// the planking — the one artefact that instantly reads as "pasted on".
-				//
-				// So the submerged part of the hull is pulled onto the water height at
-				// *its own* position, fading out at the sheer. The topsides, deck and
-				// rig stay rigid, which is what carries the boat's pitch and roll. It
-				// bends the hull by a few centimetres in exchange for a waterline that
-				// is correct everywhere, and the bend is under water.
-				// Sample every cascade, not just the swell: the waterline has to match
-				// the surface the eye sees, and the chop cascades are a third of a
-				// metre of it. (The *rigid* placement above still uses cascade 0
-				// alone — that is about how a hull responds, which is a different
-				// question from where the water is.)
-				const wxz = world.xz.toVar( 'vesWXZ' );
-				const here = float( 0 ).toVar( 'vesWaterY' );
+				const h = float( 0 ).toVar();
 
 				for ( let c = 0; c < spectral.sizes.length; c ++ ) {
 
-					here.addAssign( texture( spectral.disp[ c ], wxz.div( spectral.sizes[ c ] ), float( 0 ) ).y );
+					h.addAssign( texture( spectral.disp[ c ], xz.div( spectral.sizes[ c ] ), float( 0 ) ).y );
 
 				}
 
-				const sink = smoothstep( 0.80, - 0.05, p.y ).toVar( 'vesSink' );
+				return h;
 
-				// Assigning through a swizzle — world.y.assign(...) — compiles without
-				// complaint and does nothing. The hull kept its rigid height and hung
-				// above the water exactly as before the conform was written.
-				world.assign( vec3( world.x, mix( world.y, here.add( p.y ), sink ), world.z ) );
+			};
+
+			const normal = vec3( 0, 1, 0 ).toVar( 'vesN' );
+			const heave = float( 0 ).toVar( 'vesHeave' );
+
+			if ( spectral ) {
+
+				/* --- rigid-body fit --------------------------------------
+				 *
+				 * Four probes at the ends of the hull's two axes. Their mean is the
+				 * heave; their differences are the pitch and roll. That is a plane
+				 * fitted to the water the hull is actually sitting on, which is what
+				 * a hull does — it cannot follow anything shorter than itself, and
+				 * probes twelve metres apart low-pass the chop for free.
+				 *
+				 * This replaced a "soft hull" that pulled every submerged vertex onto
+				 * the water height at its own position. That guaranteed a perfect
+				 * waterline and destroyed everything else: the hull became a rubber
+				 * sheet draped on the surface, so waves deformed it instead of
+				 * washing along it, and the boat read as passing through the sea
+				 * rather than floating in it. A rigid hull that sometimes buries a
+				 * bow is right; a hull that cannot is not.
+				 */
+				const LP = 6.0, BP = 1.7;
+
+				const hFwd = waterAt( anchor.add( bowDir.mul( LP ) ) );
+				const hAft = waterAt( anchor.sub( bowDir.mul( LP ) ) );
+				const hStb = waterAt( anchor.add( stbdDir.mul( BP ) ) );
+				const hPrt = waterAt( anchor.sub( stbdDir.mul( BP ) ) );
+
+				heave.assign( hFwd.add( hAft ).add( hStb ).add( hPrt ).mul( 0.25 ) );
+
+				// Slopes along the hull's own axes, mapped back into world XZ.
+				const pitch = hFwd.sub( hAft ).div( LP * 2 );
+				const roll = hStb.sub( hPrt ).div( BP * 2 );
+
+				// Plus a steady lee heel from the press of wind in the sails. A
+				// dead-upright sailing boat looks becalmed however fast she goes.
+				const grad = bowDir.mul( pitch ).add( stbdDir.mul( roll.add( u.vesselHeel ) ) ).toVar( 'vesGrad' );
+
+				normal.assign( normalize( vec3( grad.x.negate(), 1.0, grad.y.negate() ) ) );
 
 			}
 
+			// cross(ref, normal) — the obvious order — yields (-1, 0, 0) for a level
+			// surface, i.e. a basis mirrored in X. That was invisible while the
+			// heading was baked into a symmetric hull: it flipped port for starboard
+			// and nothing else. The moment the yaw moved into the shader it started
+			// mirroring the heading too, and she sailed backwards heeled the wrong
+			// way. cross(normal, ref) is the right-handed one.
+			const ref = vec3( 0.0, 0.0, 1.0 );
+			const tangent = normalize( cross( normal, ref ) ).toVar( 'vesT' );
+			const bitangent = cross( tangent, normal ).toVar( 'vesB' );
+
+			// Yaw the hull into its heading, then tilt it onto the fitted plane.
+			const p = positionGeometry;
+			const yawed = vec3(
+				p.x.mul( hc ).add( p.z.mul( hs ) ),
+				p.y,
+				p.x.mul( hs ).negate().add( p.z.mul( hc ) )
+			).toVar( 'vesYawed' );
+
+			const nl = normalLocal;
+			const nYawed = vec3(
+				nl.x.mul( hc ).add( nl.z.mul( hs ) ),
+				nl.y,
+				nl.x.mul( hs ).negate().add( nl.z.mul( hc ) )
+			).toVar( 'vesNYawed' );
+
+			const tilted = tangent.mul( yawed.x ).add( normal.mul( yawed.y ) ).add( bitangent.mul( yawed.z ) );
+
+			const world = vec3( anchor.x, heave, anchor.y ).add( tilted ).toVar( 'vesWorld' );
+
 			vNormal.assign( normalize(
-				tangent.mul( normalLocal.x ).add( normal.mul( normalLocal.y ) ).add( bitangent.mul( normalLocal.z ) )
+				tangent.mul( nYawed.x ).add( normal.mul( nYawed.y ) ).add( bitangent.mul( nYawed.z ) )
 			) );
 			vPaint.assign( attribute( 'paint', 'vec3' ) );
 			vPart.assign( attribute( 'part', 'float' ) );
@@ -773,17 +806,58 @@ export class Vessel {
 	 * can sail indefinitely without ever sailing out of the world. The wrap is
 	 * several hundred metres out, where haze has taken the contrast anyway.
 	 */
+	/** Put her back on her mark, so fixed-camera QA views stay repeatable. */
+	rewind() {
+
+		this._t = 0;
+		this._heading = this._baseHeading;
+		this._pos = [ this.anchor[ 0 ], this.anchor[ 1 ] ];
+
+		const u = this.env.u;
+		u.vesselPos.value.set( this.anchor[ 0 ], 0, this.anchor[ 1 ] );
+		u.vesselDir.value.set( Math.cos( this._heading ), Math.sin( this._heading ) );
+
+	}
+
 	update( camera, dt ) {
 
-		if ( ! this.hove ) this._travel += dt * 1.55;
+		if ( this.hove ) return;
 
-		const bx = this.anchor[ 0 ] + this._bow[ 0 ] * this._travel;
-		const bz = this.anchor[ 1 ] + this._bow[ 1 ] * this._travel;
+		this._t += dt;
 
-		const x = bx + Math.round( ( camera.position.x - bx ) / LATTICE ) * LATTICE;
-		const z = bz + Math.round( ( camera.position.z - bz ) / LATTICE ) * LATTICE;
+		/* --- steering -----------------------------------------------------
+		 *
+		 * A long, lazy weave rather than a dead straight line. Two incommensurate
+		 * periods so the track never visibly repeats.
+		 *
+		 * This is why the heading is a uniform and no longer baked into the
+		 * geometry: a boat that can only go one way leaves a wake that never
+		 * bends, and a wake that never bends is the tell that nothing underneath
+		 * is actually moving.
+		 */
+		this._heading = this._baseHeading
+			+ Math.sin( this._t * 0.055 ) * 0.42
+			+ Math.sin( this._t * 0.021 + 1.7 ) * 0.26;
 
-		this.env.u.vesselPos.value.set( x, 0, z );
+		const bx = Math.sin( this._heading );
+		const bz = Math.cos( this._heading );
+
+		this._pos[ 0 ] += bx * dt * SPEED;
+		this._pos[ 1 ] += bz * dt * SPEED;
+
+		// Wrap on a long lattice relative to the viewer, like the buoys, so she
+		// can sail indefinitely without ever sailing out of the world.
+		const x = this._pos[ 0 ] + Math.round( ( camera.position.x - this._pos[ 0 ] ) / LATTICE ) * LATTICE;
+		const z = this._pos[ 1 ] + Math.round( ( camera.position.z - this._pos[ 1 ] ) / LATTICE ) * LATTICE;
+
+		const u = this.env.u;
+		u.vesselPos.value.set( x, 0, z );
+		u.vesselDir.value.set( Math.cos( this._heading ), Math.sin( this._heading ) );
+
+		// Heel follows the turn: she stands up in a luff and lies down when the
+		// wind comes abeam. Small, and entirely for the eye.
+		const rel = Math.sin( this._heading - this.env.params.windAngle * Math.PI / 180 );
+		u.vesselHeel.value = 0.030 + Math.abs( rel ) * 0.045;
 
 	}
 

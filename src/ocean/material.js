@@ -363,11 +363,7 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 			// is the ellipse the boat actually occupies rather than its bounding
 			// box. At a 57-degree heading the box is nearly twice the area, and the
 			// foam collar drawn from it read as a raft the boat was sitting on.
-			// Offset opposite the sun by the hull's own height over the sun's
-			// elevation — a shadow is cast, not centred. Clamped because a low sun
-			// would otherwise throw it to the horizon.
-			const drop = u.sunDir.xz.div( max( u.sunDir.y, float( 0.30 ) ) ).mul( 1.4 );
-			const rel = P.xz.sub( u.vesselPos.xz ).add( drop ).toVar( 'hullRel' );
+			const rel = P.xz.sub( u.vesselPos.xz ).toVar( 'hullRel' );
 
 			// Rotate world XZ into the hull's frame: x across the beam, y toward the
 			// bow. The transpose of this had the sign on the wrong term, which
@@ -387,7 +383,20 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 			// it. Without this the boat looks pasted on: it is the darkening in the
 			// water, more than the object itself, that says something is *in* the
 			// sea rather than in front of it.
-			const shade = oneMinus( smoothstep( 0.72, 1.12, hullD ) ).mul( 0.34 ).toVar( 'hullShade' );
+			//
+			// It gets its *own* distance, offset opposite the sun by the hull height
+			// over the sun's elevation, because a shadow is cast rather than centred.
+			// That offset used to be folded into hullD itself — which also feeds the
+			// waterline collar, so the foam ring was displaced two metres off the
+			// planking and spent most of its life hidden under the hull.
+			const drop = u.sunDir.xz.div( max( u.sunDir.y, float( 0.30 ) ) ).mul( 1.4 );
+			const relS = rel.add( drop );
+			const shadeLocal = vec2(
+				relS.x.mul( c ).sub( relS.y.mul( sn ) ),
+				relS.x.mul( sn ).add( relS.y.mul( c ) )
+			).div( u.vesselHalf );
+
+			const shade = oneMinus( smoothstep( 0.72, 1.15, length( shadeLocal ) ) ).mul( 0.34 ).toVar( 'hullShade' );
 			body.mulAssign( oneMinus( shade ) );
 
 		} );
