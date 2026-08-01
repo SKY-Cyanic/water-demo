@@ -19,7 +19,7 @@
 
 import { DoubleSide, FrontSide, Mesh, MeshBasicNodeMaterial } from 'three/webgpu';
 import {
-	Fn, If, abs, cameraPosition, dot, exp, faceDirection, float, length, max, min, mix,
+	Fn, If, abs, cameraPosition, dFdx, dFdy, dot, exp, faceDirection, float, length, max, min, mix,
 	mx_fractal_noise_float, normalize, oneMinus, positionGeometry, positionWorld, pow, reflect,
 	refract, saturate, screenUV, smoothstep, step, texture, varyingProperty, vec2, vec3,
 } from 'three/tsl';
@@ -154,6 +154,9 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 
 		// Work in gradient space so the ripple slope adds to the wave slope
 		// correctly instead of being blended into a normalised vector.
+		// Sub-pixel slope variance, accumulated below and turned into roughness.
+		const sigma = float( 0 ).toVar( 'slopeVar' );
+
 		const invY = float( 1 ).div( max( Nw.y, float( 0.06 ) ) );
 		const grad = vec2( Nw.x.mul( invY ), Nw.z.mul( invY ) ).toVar( 'grad' );
 
@@ -169,7 +172,15 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 
 				const [ a, b ] = spectral.slopeFade[ c ];
 				const fade = oneMinus( smoothstep( a, b, vRadial ) );
-				g.addAssign( sampleAt( spectral.slope[ c ], vRestXZ, spectral.sizes[ c ] ).xy.mul( fade ) );
+				const s = sampleAt( spectral.slope[ c ], vRestXZ, spectral.sizes[ c ] ).xy;
+
+				g.addAssign( s.mul( fade ) );
+
+				// The slope energy this cascade is *losing* to distance is exactly
+				// the slope the pixel can no longer resolve — which is what a
+				// roughness lobe is supposed to stand in for. Free: the sample is
+				// already in hand.
+				sigma.addAssign( dot( s, s ).mul( oneMinus( fade ).mul( oneMinus( fade ) ) ) );
 
 			}
 
@@ -189,7 +200,13 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 
 		// Far water must go flat or the normal aliases into a shimmering band
 		// along the horizon.
-		const flatten = smoothstep( 900.0, 9000.0, vRadial ).toVar( 'flatten' );
+		// Pushed back out. The 900 m version was an aliasing patch that cost the
+		// horizon its shape — flat normals three kilometres out read as a blur
+		// filter, not as aerial perspective. The variance roughness above now does
+		// that job properly: as the cascades fade with distance their lost slope
+		// energy raises sigma, the lobe broadens to the Cox-Munk value the ramp used
+		// to force, and the normal survives.
+		const flatten = smoothstep( 3500.0, 22000.0, vRadial ).toVar( 'flatten' );
 		const N = normalize( mix( Nd, vec3( 0.0, 1.0, 0.0 ), flatten ) ).toVar( 'N' );
 
 		const nDotV = saturate( dot( N, V ) ).toVar( 'nDotV' );
@@ -214,11 +231,40 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 		// This handoff is the sun's glitter track. Its width comes out of the wind
 		// speed rather than a tuned constant, so raising the wind widens the track
 		// the way it does on real water.
-		const rough = mix(
-			max( u.roughness, float( 0.020 ) ),
-			u.slopeRoughness,
-			smoothstep( 12.0, 520.0, vRadial )
+		// Roughness from *local* slope variance, not from camera distance.
+		//
+		// The distance ramp alone is what made the water look like painted metal:
+		// a steep chop face two metres away kept a mirror-sharp lobe because the
+		// only thing the roughness knew was that the pixel was near. Real water is
+		// roughest exactly where it is steepest — that is where the unresolved
+		// ripples live — so the lobe has to come from the surface, not the camera.
+		//
+		// Two variance sources, added in variance space (Toksvig/LEAN): what the
+		// cascades dropped to distance (accumulated above), and what this pixel's
+		// own footprint spans, from the screen-space derivative of the gradient.
+		// The first knows the real spectrum; the second catches everything the
+		// textures never had — mesh silhouette, procedural ripples, sheer angle.
+		const dgx = dFdx( grad ), dgy = dFdy( grad );
+		const sigmaP = dot( dgx, dgx ).add( dot( dgy, dgy ) ).toVar( 'slopeVarPix' );
+
+		const a0 = max( u.roughness, float( 0.020 ) ).toVar( 'baseRough' );
+		const aMax = max( u.slopeRoughness, a0 ).toVar( 'roughCeil' );
+
+		// Cox-Munk is the physical ceiling: it already is the total slope variance
+		// of the whole spectrum, so no local estimate may exceed it.
+		const alpha2 = a0.mul( a0 ).mul( a0 ).mul( a0 )
+			.add( sigma.add( sigmaP ).mul( u.varianceRough ).mul( 0.55 ) )
+			.toVar( 'alpha2' );
+
+		const rough = min(
+			max( pow( alpha2, 0.25 ), a0 ),
+			aMax
 		).toVar( 'rough' );
+
+		// Distance ramp retained as a floor for now — it is what currently carries
+		// the glitter track, and it is removed in the far-field step once the
+		// variance term is verified to reach the same value on its own.
+		rough.assign( max( rough, mix( a0, aMax, smoothstep( 12.0, 520.0, vRadial ) ) ) );
 
 		// How much of the sky one pixel of this surface integrates over. Feeding
 		// this to the sky function is a stand-in for a pre-convolved environment
@@ -334,7 +380,57 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 		// 7-metre lagoon at 0.15 of the gradient, so every part of it came out the
 		// same pale shallow colour and the water read as a flat wash.
 		const depthScale = mix( maxPath, float( 24.0 ), u.seabedMix ).toVar( 'depthScale' );
-		const depthNorm = saturate( pathLen.div( depthScale ).mul( mix( float( 1.06 ), float( 0.68 ), crest ) ) ).toVar( 'depthNorm' );
+		const crestTerm = mix( float( 1.06 ), float( 0.68 ), crest ).toVar( 'crestTerm' );
+
+		/* --- deep-water optical volume --------------------------------- */
+
+		// With no bottom, the old code was degenerate: pathLen and depthScale were
+		// both maxPath, so their ratio was exactly 1.0 and the absorption
+		// coefficients had *no effect whatsoever* on the surface. Eight of the ten
+		// presets ran that way. The water was a two-colour lerp driven only by
+		// wave height — which is precisely why it read as an opaque moving plane
+		// rather than as a body of water.
+		//
+		// The right model when the column is effectively infinite is that upwelling
+		// radiance saturates at the single-scattering albedo, and it saturates at a
+		// different depth in every channel: red is gone within a couple of metres,
+		// blue survives twenty. So a trough — a long slant path through the
+		// near-surface layer — loses its red and goes deep blue-green, while a
+		// crest face seen at a grazing angle keeps some and reads bright and
+		// translucent. That per-channel difference is the whole effect.
+		const bb = u.backscatter.toVar( 'backscatter' );
+		const ext = u.absorption.add( bb ).toVar( 'extinction' );
+
+		// Depth of this pixel below the local wave envelope, along the refracted
+		// ray. The near-surface layer keeps a crest from ever going black.
+		const relDepth = max( u.waveHs.sub( vHeight ), float( 0.0 ) );
+		const dEff = relDepth.add( 0.6 ).div( max( refr.y.negate(), float( 0.28 ) ) ).toVar( 'dEff' );
+
+		const sat3 = oneMinus( exp( ext.mul( dEff ).negate() ) ).toVar( 'sat3' );
+		const albedo = bb.div( max( ext, vec3( 1e-4 ) ) ).toVar( 'ssAlbedo' );
+
+		// Only where there is no bottom. Over a seabed the existing Beer-Lambert
+		// path is already correct and already depth-graded, and holding the lagoon
+		// presets pixel-stable is the check that this change did not reach further
+		// than it was supposed to.
+		const gDeep = u.volumeGeom.mul( oneMinus( u.seabedMix ) ).toVar( 'gDeep' );
+
+		const depthNorm = saturate(
+			mix( saturate( pathLen.div( depthScale ) ), sat3.g, gDeep ).mul( crestTerm )
+		).toVar( 'depthNorm' );
+
+		// Chromaticity from the albedo, normalised so it only shifts hue and never
+		// brightness — the ten authored presets stay recognisable and absorption
+		// reshapes them rather than replacing them.
+		const tint = albedo.div( max( max( albedo.r, max( albedo.g, albedo.b ) ), float( 1e-4 ) ) ).toVar( 'volTint' );
+
+		// A trough sees less of the sky than a crest does. Cheap, and one of the
+		// strongest cues that the surface has relief rather than just a normal map.
+		const skyOcc = mix(
+			float( 1.0 ),
+			saturate( vHeight.div( max( u.waveHs, float( 0.30 ) ) ).mul( 0.45 ).add( 0.55 ) ),
+			gDeep
+		).toVar( 'skyOcc' );
 
 
 		// Beer-Lambert: how much of the bottom survives the water column.
@@ -344,7 +440,8 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 		// plus upwelling scattered skylight. The second term is what ties the
 		// water's colour to the sky, so a preset change moves both together.
 		const volume = mix( u.waterShallow, u.waterDeep, depthNorm ).mul( ambient )
-			.add( u.waterScatter.mul( skyLight ).mul( 0.80 ) )
+			.mul( mix( vec3( 1.0 ), tint, gDeep ) )
+			.add( u.waterScatter.mul( skyLight ).mul( 0.80 ).mul( skyOcc ) )
 			.toVar( 'volume' );
 
 		const body = bedColor.mul( T ).add( volume.mul( oneMinus( T ) ) ).toVar( 'body' );
@@ -479,10 +576,14 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 		}
 
 		// Distant foam is the worst aliasing source in the whole scene.
-		const foamFade = oneMinus( smoothstep( 300.0, 1900.0, vRadial ) );
+		const foamFade = oneMinus( smoothstep( 1200.0, 6000.0, vRadial ) );
 
 		const erode = foamFine.mul( 0.62 ).add( foamPatch.mul( 0.52 ) ).add( 0.14 ).toVar( 'foamErode' );
-		const foamMask = smoothstep( 0.22, 0.70, foamRaw.mul( erode ) ).mul( foamFade ).toVar( 'foamMask' );
+		// One onset test, not two. foamFromJacobian already decides *whether* a crest
+		// breaks; this smoothstep used to decide it again, and the two in series meant
+		// a fully saturated whitecap landed mid-ramp at ~0.51 and could never reach
+		// white. This band now only shapes the edge.
+		const foamMask = smoothstep( 0.05, 0.55, foamRaw.mul( erode ) ).mul( foamFade ).toVar( 'foamMask' );
 
 		// Foam is lit, not painted white: it darkens in shadow and warms at sunset.
 		const foamLit = u.foamColor.mul(

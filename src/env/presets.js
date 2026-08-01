@@ -201,9 +201,12 @@ export const PRESETS = [
 			foamAmount: 0.62, foamThreshold: 0.55, foamPersistence: 0.68,
 			foamSharpness: 1.05, foamColor: '#f4fbff',
 
-			uwTint: '#0a5a86', uwVisibility: 30, causticStrength: 0.55, particleDensity: 0.40,
+			uwTint: '#0a5a86', uwVisibility: 34, causticStrength: 0.62, particleDensity: 0.40,
 
-			seabedEnabled: 0, seabedDepth: 40, seabedColor: '#7d7660',
+			// A bottom at 22 m. Deep enough that the water is unmistakably ocean,
+			// shallow enough that the column visibly changes colour across a sandbar
+			// — which is the single richest thing a shot of water can show.
+			seabedEnabled: 1, seabedDepth: 22, seabedColor: '#b9b49a',
 		},
 	},
 

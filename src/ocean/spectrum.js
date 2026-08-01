@@ -31,10 +31,22 @@ import { GRAVITY, TAU, mulberry32 } from '../core/util.js';
  * The k-range cutoffs make the bands disjoint so energy is never counted twice
  * where the domains overlap.
  */
+/**
+ * `axisOffset` is the band's mean direction relative to the wind, in degrees.
+ *
+ * Spreading all three bands about one axis is what makes a procedural sea read
+ * as corduroy: every scale runs the same way, so the whole surface is one set of
+ * parallel wrinkles and the eye reads a texture rather than water. Real seas
+ * almost never look like that. Swell arrives from wherever it was generated,
+ * often a day's travel away and twenty to sixty degrees off the local wind,
+ * while the chop is close to isotropic. Crossing the bands costs nothing — it
+ * is a different sampling of the same spectrum — and it is the single largest
+ * improvement available to the wave field.
+ */
 export const CASCADES = [
-	{ size: 512, kMin: 0.0, kMax: 0.055 },   // swell — wavelengths above ~114 m
-	{ size: 96, kMin: 0.055, kMax: 0.35 },  // wind sea
-	{ size: 18, kMin: 0.35, kMax: 1e9 },    // chop and ripples
+	{ size: 512, kMin: 0.0, kMax: 0.055, axisOffset: 35 },   // swell — above ~114 m
+	{ size: 96, kMin: 0.055, kMax: 0.35, axisOffset: 0 },   // wind sea, on the wind
+	{ size: 18, kMin: 0.35, kMax: 1e9, axisOffset: - 12 },  // chop and ripples
 ];
 
 /**
@@ -87,7 +99,12 @@ function directionalSpread( theta, k, wind ) {
 		? 6.97 * Math.pow( ratio, 4.06 )
 		: 9.77 * Math.pow( ratio, - 2.33 );
 
-	const spread = Math.pow( Math.abs( Math.cos( theta * 0.5 ) ), 2 * Math.max( 0.5, s ) );
+	// The exponent floor also sets how tightly the shortest waves fan out. Held
+	// at 0.5 the chop stayed noticeably combed; capillary-scale waves are stirred
+	// by every gust and eddy and are very nearly isotropic, so the floor drops
+	// with wavenumber.
+	const floor = k > 0.35 ? 0.18 : 0.5;
+	const spread = Math.pow( Math.abs( Math.cos( theta * 0.5 ) ), 2 * Math.max( floor, s ) );
 
 	// A small isotropic floor keeps the surface from becoming a pure corduroy
 	// pattern when the wind axis dominates completely.
@@ -114,7 +131,8 @@ export function buildInitialSpectrum( cascade, N, p, seed ) {
 	const L = cascade.size;
 	const rnd = mulberry32( seed ^ ( L * 2654435761 ) );
 
-	const windRad = p.windAngle * Math.PI / 180;
+	// Each band gets its own mean direction — see the note on CASCADES.
+	const windRad = ( p.windAngle + ( cascade.axisOffset ?? 0 ) ) * Math.PI / 180;
 	const windX = Math.sin( windRad );
 	const windZ = Math.cos( windRad );
 

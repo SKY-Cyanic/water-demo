@@ -223,7 +223,10 @@ export class SpectralOcean {
 				const dz = p1.x.mul( amp ).mul( this.uChoppy );
 				const dYdx = p1.y.mul( amp );
 				const dYdz = p2.x.mul( amp );
-				const divergence = p2.y.mul( amp ).mul( this.uChoppy );
+				// Raw, *not* scaled by choppiness. uChoppy is how far the surface is
+				// displaced horizontally; it has no business shrinking the folding
+				// metric by 20% before the whitecap test even sees it.
+				const divergence = p2.y.mul( amp );
 
 				textureStore( dispTex, ivec2( int( x ), int( z ) ), vec4( dx, dy, dz, divergence ) ).toStack();
 				textureStore( slopeTex, ivec2( int( x ), int( z ) ), vec4( dYdx, dYdz, 0, 1 ) ).toStack();

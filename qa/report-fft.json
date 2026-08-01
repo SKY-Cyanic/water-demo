@@ -1,7 +1,7 @@
 {
 	"command": "fft",
 	"origin": "http://localhost:8173",
-	"startedAt": "2026-07-31T13:11:34.060Z",
+	"startedAt": "2026-08-01T02:03:13.751Z",
 	"userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
 	"fft": [
 		{
@@ -81,7 +81,7 @@
 			{
 				"size": 512,
 				"maxHermitianError": 0,
-				"maxAmplitude": 0.08243
+				"maxAmplitude": 0.05822
 			},
 			{
 				"size": 96,
@@ -91,7 +91,7 @@
 			{
 				"size": 18,
 				"maxHermitianError": 0,
-				"maxAmplitude": 0.134
+				"maxAmplitude": 0.1328
 			}
 		],
 		"pass": true
@@ -99,13 +99,13 @@
 	"ocean": {
 		"N": 64,
 		"requestedWaveHeight": 2,
-		"measuredSignificantHeight": 1.951,
-		"ratio": 0.976,
-		"maxDivergenceMagnitude": 0.502,
-		"normalisation": 0.1942,
+		"measuredSignificantHeight": 1.948,
+		"ratio": 0.974,
+		"maxDivergenceMagnitude": 0.541,
+		"normalisation": 0.1946,
 		"pass": true
 	},
 	"fftAllPass": true,
-	"finishedAt": "2026-07-31T13:11:35.238Z",
+	"finishedAt": "2026-08-01T02:03:15.238Z",
 	"ok": true
 }

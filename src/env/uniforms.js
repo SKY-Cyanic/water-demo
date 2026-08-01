@@ -27,7 +27,8 @@ export const SCALAR_KEYS = [
 	'waveHeight', 'waveChoppy', 'windSpeed', 'windAngle', 'waveScale', 'detailStrength',
 	// water optics
 	'waterClarity', 'absorptionR', 'absorptionG', 'absorptionB',
-	'roughness', 'sssStrength', 'reflectivity',
+	'roughness', 'sssStrength', 'reflectivity', 'varianceRough',
+	'volumeGeom', 'scatterStrength',
 	// foam
 	'foamAmount', 'foamThreshold', 'foamPersistence', 'foamSharpness',
 	// underwater
@@ -97,6 +98,9 @@ export function createEnv() {
 		absorptionG: 0.11,
 		absorptionB: 0.055,
 		roughness: 0.09,
+		varianceRough: 1.0,
+		volumeGeom: 1.0,
+		scatterStrength: 0.085,
 		sssStrength: 1.0,        // back-lit wave crest translucency
 		reflectivity: 1.0,
 
@@ -174,6 +178,17 @@ export function createEnv() {
 		absorption: uniform( new Vector3() ),
 		waterClarity: uniform( 1 ),
 		roughness: uniform( 0.09 ),
+
+		// Kill switch for the local slope-variance roughness term: 0 restores the
+		// pure camera-distance ramp, which is what A/B measurement needs.
+		varianceRough: uniform( 1 ),
+
+		// Deep-water volume. volumeGeom is the kill switch — 0 restores the old
+		// wave-height-only lerp exactly. backscatter is the water's b_b, which
+		// together with absorption sets the single-scattering albedo.
+		volumeGeom: uniform( 1 ),
+		backscatter: uniform( new Vector3( 0.02, 0.05, 0.06 ) ),
+		waveHs: uniform( 1.8 ),
 		sssStrength: uniform( 1 ),
 		reflectivity: uniform( 1 ),
 
@@ -309,11 +324,34 @@ export function syncUniforms( env, dt = 0 ) {
 	u.absorption.value.set( p.absorptionR * inv, p.absorptionG * inv, p.absorptionB * inv );
 	u.waterClarity.value = p.waterClarity;
 	u.roughness.value = p.roughness;
+	u.varianceRough.value = p.varianceRough ?? 1;
+	u.volumeGeom.value = p.volumeGeom ?? 1;
+	u.waveHs.value = Math.max( 0.05, p.waveHeight );
+
+	// Backscatter shares the scatter colour's chromaticity — they describe the
+	// same particulate — scaled to a coefficient in inverse metres.
+	{
+
+		const c = u.waterScatter.value;
+		const k = ( p.scatterStrength ?? 0.085 ) * inv;
+		u.backscatter.value.set( Math.max( 1e-4, c.r * k ), Math.max( 1e-4, c.g * k ), Math.max( 1e-4, c.b * k ) );
+
+	}
 	u.sssStrength.value = p.sssStrength;
 	u.reflectivity.value = p.reflectivity;
 
 	u.foamAmount.value = p.foamAmount;
-	u.foamThreshold.value = p.foamThreshold;
+	// Whitecap coverage from wind speed (Monahan & O'Muircheartaigh 1980):
+	// W = 3.84e-6 * U^3.41, the fraction of sea surface actively breaking. It is a
+	// very steep law — 9.5 m/s gives ~0.8%, 21 m/s gives ~12% — and using it to
+	// lower the fold threshold means coverage tracks the wind instead of being ten
+	// hand-tuned preset numbers that all happened to sit above the onset.
+	{
+
+		const W = 3.84e-6 * Math.pow( Math.max( 0.5, p.windSpeed ), 3.41 );
+		u.foamThreshold.value = p.foamThreshold * ( 1 - 0.55 * Math.min( 1, W / 0.02 ) );
+
+	}
 	u.foamSharpness.value = p.foamSharpness;
 	setColor( u.foamColor.value, p.foamColor );
 
