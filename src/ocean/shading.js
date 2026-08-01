@@ -79,9 +79,17 @@ export const rippleSlope = /*@__PURE__*/ Fn( ( [ p, time, wind, strength, dist ]
 /**
  * Procedural caustics.
  *
- * Two counter-drifting Worley fields, inverted and sharpened, give the
- * characteristic bright interlocking web. Taking the min of the two produces
- * the ridge crossings where real caustics concentrate.
+ * Two counter-drifting Worley fields. The bright web is drawn where the two
+ * fields *agree* — a set of wandering curves through the plane, which is the
+ * right topology for a caustic: light folded by the surface concentrates on
+ * curves (the fold caustics), not on points.
+ *
+ * The previous version took `1 - min(w1, w2)`. Worley's F1 distance is zero at
+ * a cell's centre and largest at its boundary, so inverting it peaks at the
+ * centres, and raising that to the seventh power isolated them completely: the
+ * result was round blobs on a hexagonal lattice, covering the whole lagoon
+ * floor in what looked like bubble wrap. It is the exact opposite of the
+ * intended figure, and the comment above it claimed filaments throughout.
  *
  * @param {Node<vec2>}  p      world XZ of the lit surface
  * @param {Node<float>} time
@@ -89,7 +97,9 @@ export const rippleSlope = /*@__PURE__*/ Fn( ( [ p, time, wind, strength, dist ]
  */
 export const causticPattern = /*@__PURE__*/ Fn( ( [ p, time ] ) => {
 
-	const q = p.mul( 0.42 ).toVar();
+	// Cells were 2.4 m across, which is a caustic the size of a dinner table.
+	// On a bottom a few metres down the web is finer than a pace.
+	const q = p.mul( 1.15 ).toVar();
 	const t = time.mul( 0.42 ).toVar();
 
 	const w1 = mx_worley_noise_float( q.add( vec2( t.mul( 0.21 ), t.mul( - 0.13 ) ) ), 1.0, 1 ).toVar();
@@ -97,10 +107,16 @@ export const causticPattern = /*@__PURE__*/ Fn( ( [ p, time ] ) => {
 		q.mul( 1.63 ).add( vec2( t.mul( - 0.16 ), t.mul( 0.24 ) ) ).add( 19.7 ), 1.0, 1
 	).toVar();
 
-	const ridge = oneMinus( min( w1, w2 ) ).toVar();
-
-	// Sharpen into thin bright filaments rather than soft blobs.
-	const c = pow( saturate( ridge ), 7.0 ).mul( 2.6 ).toVar();
+	// Bright where the two fields cross. An exponential rather than a power
+	// because the line width is then set directly, in units of the difference,
+	// instead of emerging from an exponent that has to be re-guessed whenever
+	// either field's scale moves.
+	const c = exp( abs( w1.sub( w2 ) ).mul( - 13.0 ) ).mul( 2.2 )
+		// A second, coarser crossing set. Real caustics are not one scale: the
+		// long swell throws a broad slow web that the chop writes fine detail
+		// onto, and their product is what makes the pattern look focused.
+		.mul( exp( abs( w1.mul( 0.31 ).sub( w2.mul( 0.29 ) ) ).mul( - 5.0 ) ).mul( 0.55 ).add( 0.62 ) )
+		.toVar();
 
 	// A slow large-scale modulation so the web breathes instead of tiling flat.
 	const breathe = sin( p.x.mul( 0.021 ).add( time.mul( 0.31 ) ) )
@@ -187,9 +203,25 @@ export const seabedAlbedo = /*@__PURE__*/ Fn( ( [ p, sand ] ) => {
 	// it. Authoring the preset colour at full brightness and then multiplying by
 	// one meant a shallow bottom out-ran the water above it: the column had
 	// nothing left to tint and the lagoon came out near-white.
-	const base = sand.mul( float( 0.30 ).add( grain.mul( 0.22 ) ) );
+	// Sand ripples. A lagoon floor under any swell at all is corrugated into
+	// near-parallel bands about a third of a metre apart, and their direction
+	// wanders slowly with the local flow. Without them the bottom is a noise
+	// field, and a noise field several metres down low-passes into a smudge —
+	// which is exactly how the reef read. Ripples survive the column because
+	// they are *oriented*: the eye reconstructs a direction from far less
+	// contrast than it needs to reconstruct a texture.
+	const drift = mx_fractal_noise_float( vec3( p.mul( 0.014 ).add( 41.3 ), 0.0 ), 2, 2.0, 0.5 ).mul( 1.9 );
+	const along = p.x.mul( cos( drift ) ).add( p.y.mul( sin( drift ) ) );
+	const ripple = sin( along.mul( 19.0 ) ).mul( 0.5 ).add( 0.5 );
 
-	return mix( base, base.mul( vec3( 0.14, 0.24, 0.20 ) ), weed.mul( 0.92 ) );
+	// Crest-sharpened: a sand ripple has a rounded crest and a flat trough, so
+	// the lit face is the narrower one.
+	const corrugation = pow( ripple, 1.8 ).mul( 0.16 ).add( 0.92 );
+
+	const base = sand.mul( float( 0.30 ).add( grain.mul( 0.22 ) ) ).mul( corrugation );
+
+	// Weed does not grow in ripples, so it flattens them where it takes hold.
+	return mix( base, sand.mul( 0.30 ).mul( vec3( 0.14, 0.24, 0.20 ) ), weed.mul( 0.92 ) );
 
 } );
 
