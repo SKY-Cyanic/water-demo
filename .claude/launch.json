@@ -3,7 +3,8 @@
   "configurations": [
     {
       "name": "water-demo",
-      "url": "http://localhost:8173",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [ "serve.mjs" ],
       "port": 8173
     }
   ]
