@@ -8,7 +8,7 @@
 //   node tools/qa.mjs smoke                 load, console check, state dump
 //   node tools/qa.mjs shots                 every required capture into qa/
 //   node tools/qa.mjs perf [seconds]        measured FPS at 1920x1080 and 1280x720
-//   node tools/qa.mjs abshafts [s] [flag] [view] [preset]   paired A/B on one kill switch
+//   node tools/qa.mjs abshafts [s] [flag] [view] [preset] [dpr]  paired A/B on one kill switch
 //   node tools/qa.mjs stress                resize / preset / medium-crossing / hidden-tab
 //   node tools/qa.mjs all [perfSeconds]     everything, writes qa/report.json
 //
@@ -570,6 +570,14 @@ async function abShafts( chrome, seconds, rounds = 3, opts = {} ) {
 	const flag = opts.flag ?? 'noshafts';
 	const view = opts.view ?? 'under';
 	const preset = opts.preset ?? 'calm-lagoon';
+
+	// Pixel ratio, because pairing does not rescue a measurement that is pinned.
+	// The first A/B on the refraction returned a delta of exactly zero in all
+	// three rounds — both arms sat on the 16.67 ms vsync cap, where nothing below
+	// it is observable no matter how carefully the arms are interleaved. A term
+	// that costs anything at all only becomes visible once the frame leaves the
+	// cap, which at 1080p means pushing four times the pixels.
+	const dpr = opts.dpr ?? 1;
 	const arms = { on: '/', off: `/?${flag}=1` };
 	const ms = { on: [], off: [] };
 	const paired = [];
@@ -581,7 +589,7 @@ async function abShafts( chrome, seconds, rounds = 3, opts = {} ) {
 
 		for ( const arm of order ) {
 
-			await chrome.setViewport( 1920, 1080, 1 );
+			await chrome.setViewport( 1920, 1080, dpr );
 			await chrome.goto( ORIGIN + arms[ arm ] );
 			await chrome.eval(
 				setState( { preset, view, quality: 'high' } )
@@ -825,8 +833,9 @@ try {
 		const flag = process.argv[ 4 ] || 'noshafts';
 		const view = process.argv[ 5 ] || 'under';
 		const preset = process.argv[ 6 ] || 'calm-lagoon';
-		console.log( `abshafts (${seconds}s per sample, 3 interleaved rounds, ?${flag}=1, ${preset}/${view}) …` );
-		report.abshafts = await abShafts( chrome, seconds, 3, { flag, view, preset } );
+		const dpr = Number( process.argv[ 7 ] ) || 1;
+		console.log( `abshafts (${seconds}s, 3 interleaved rounds, ?${flag}=1, ${preset}/${view}, dpr ${dpr}) …` );
+		report.abshafts = await abShafts( chrome, seconds, 3, { flag, view, preset, dpr } );
 
 	}
 
