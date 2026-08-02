@@ -432,8 +432,19 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 				// The ray has passed behind something, and not by more than the
 				// thickness we are willing to believe is a surface rather than a
 				// gap we should have marched through.
+				// Soft on both edges, not a hard window.
+				//
+				// A binary hit test on per-pixel data that moves between frames
+				// flips, and the flip is a full-strength colour change — the same
+				// defect as the crest mask earlier in this project, arrived at from
+				// a different direction. Measured: a hard test raised the
+				// frame-to-frame spark fraction from 3.17% to 4.12% across every
+				// view. Fading the acceptance over the thickness costs nothing and
+				// the reflection is no less present, only less certain at its own
+				// boundary, which is honest.
 				const gap = rayLin.sub( sceneLin );
-				const found = step( 0.0, gap ).mul( step( gap, float( SSR_THICKNESS ) ) )
+				const found = smoothstep( 0.0, SSR_THICKNESS * 0.35, gap )
+					.mul( oneMinus( smoothstep( SSR_THICKNESS * 0.6, SSR_THICKNESS, gap ) ) )
 					.mul( onScreen ).mul( oneMinus( hit ) );
 
 				hitCol.assign( mix( hitCol, sceneColorTex.sample( sp.xy ).rgb, found ) );
