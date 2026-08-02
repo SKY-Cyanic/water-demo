@@ -8,6 +8,7 @@
 //   node tools/qa.mjs smoke                 load, console check, state dump
 //   node tools/qa.mjs shots                 every required capture into qa/
 //   node tools/qa.mjs perf [seconds]        measured FPS at 1920x1080 and 1280x720
+//   node tools/qa.mjs abshafts [seconds]    paired A/B on the underwater shaft march
 //   node tools/qa.mjs stress                resize / preset / medium-crossing / hidden-tab
 //   node tools/qa.mjs all [perfSeconds]     everything, writes qa/report.json
 //
@@ -448,6 +449,7 @@ async function perf( chrome, seconds ) {
 	}
 
 	// Underwater carries an extra full-screen pass; worth its own number.
+	// If that number matters, use `abshafts` rather than this one — see below.
 	await chrome.setViewport( 1920, 1080, 1 );
 	await chrome.goto( ORIGIN + '/' );
 	await chrome.eval( setState( { preset: 'calm-lagoon', view: 'under', quality: 'high' } ) + '; window.__set({ autoQuality:false })' );
@@ -547,6 +549,63 @@ async function stress( chrome ) {
 }
 
 /* -------------------------------------------------------------------- main */
+
+/**
+ * Interleaved A/B on the underwater light-shaft march.
+ *
+ * This exists because every unpaired performance number this project has taken
+ * on a warm machine has been wrong. Two back-to-back runs gave 38.6 fps at
+ * eight march steps and 31.9 at six — the cheaper build measuring slower — which
+ * is a thermal ramp swamping the effect. An absolute number cannot separate the
+ * two; a *paired* one can.
+ *
+ * So: two variants differing only by a URL flag, alternated inside one session,
+ * with the order flipped every round. A monotonic drift then lands on both arms
+ * roughly equally and cancels in the per-round difference. What is reported is
+ * the median of the paired differences, not the difference of the medians —
+ * the former is what survives a drift, the latter is not.
+ */
+async function abShafts( chrome, seconds, rounds = 3 ) {
+
+	const arms = { on: '/', off: '/?noshafts=1' };
+	const ms = { on: [], off: [] };
+	const paired = [];
+
+	for ( let r = 0; r < rounds; r ++ ) {
+
+		const order = r % 2 === 0 ? [ 'on', 'off' ] : [ 'off', 'on' ];
+		const round = {};
+
+		for ( const arm of order ) {
+
+			await chrome.setViewport( 1920, 1080, 1 );
+			await chrome.goto( ORIGIN + arms[ arm ] );
+			await chrome.eval(
+				setState( { preset: 'calm-lagoon', view: 'under', quality: 'high' } )
+				+ '; window.__set({ autoQuality:false })'
+			);
+			await sleep( 4000 );
+
+			const s = await chrome.eval( `window.__perf(${seconds}, "shafts-${arm}-r${r}")` );
+			ms[ arm ].push( s.avgMs );
+			round[ arm ] = s.avgMs;
+			console.log( `  r${r} shafts ${arm.padEnd( 3 )}: ${s.avgFps} fps, ${s.avgMs} ms, 1% low ${s.onePercentLowFps}` );
+
+		}
+
+		paired.push( Number( ( round.on - round.off ).toFixed( 2 ) ) );
+
+	}
+
+	const median = ( a ) => [ ...a ].sort( ( x, y ) => x - y )[ Math.floor( a.length / 2 ) ];
+
+	const cost = median( paired );
+	console.log( `  paired deltas (on - off, ms): ${paired.join( ', ' )}` );
+	console.log( `  shaft march costs ${cost} ms/frame (median of paired), off = ${median( ms.off )} ms, on = ${median( ms.on )} ms` );
+
+	return { seconds, rounds, msOn: ms.on, msOff: ms.off, pairedDeltaMs: paired, shaftCostMs: cost };
+
+}
 
 const command = process.argv[ 2 ] || 'smoke';
 const arg = Number( process.argv[ 3 ] );
@@ -753,6 +812,14 @@ try {
 		const seconds = Number.isFinite( arg ) && arg > 0 ? arg : 30;
 		console.log( `perf (${seconds}s per sample) …` );
 		report.perf = await perf( chrome, seconds );
+
+	}
+
+	if ( command === 'abshafts' ) {
+
+		const seconds = Number.isFinite( arg ) && arg > 0 ? arg : 12;
+		console.log( `abshafts (${seconds}s per sample, 3 interleaved rounds) …` );
+		report.abshafts = await abShafts( chrome, seconds );
 
 	}
 
