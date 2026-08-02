@@ -1,0 +1,28 @@
+{
+	"command": "abshafts",
+	"origin": "http://localhost:8173",
+	"startedAt": "2026-08-02T06:52:33.902Z",
+	"userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+	"abshafts": {
+		"seconds": 12,
+		"rounds": 3,
+		"msOn": [
+			20.2,
+			21.28,
+			21.54
+		],
+		"msOff": [
+			16.67,
+			16.67,
+			16.67
+		],
+		"pairedDeltaMs": [
+			3.53,
+			4.61,
+			4.87
+		],
+		"shaftCostMs": 4.61
+	},
+	"finishedAt": "2026-08-02T06:54:12.405Z",
+	"ok": true
+}
