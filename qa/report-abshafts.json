@@ -1,28 +1,31 @@
 {
 	"command": "abshafts",
 	"origin": "http://localhost:8173",
-	"startedAt": "2026-08-02T06:52:33.902Z",
+	"startedAt": "2026-08-02T07:36:00.794Z",
 	"userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
 	"abshafts": {
+		"flag": "norefract",
+		"view": "vessel",
+		"preset": "coral-shallows",
 		"seconds": 12,
 		"rounds": 3,
 		"msOn": [
-			20.2,
-			21.28,
-			21.54
+			27.03,
+			27.84,
+			27.82
 		],
 		"msOff": [
-			16.67,
-			16.67,
-			16.67
+			28.97,
+			29.13,
+			29.45
 		],
 		"pairedDeltaMs": [
-			3.53,
-			4.61,
-			4.87
+			-1.94,
+			-1.29,
+			-1.63
 		],
-		"shaftCostMs": 4.61
+		"costMs": -1.63
 	},
-	"finishedAt": "2026-08-02T06:54:12.405Z",
+	"finishedAt": "2026-08-02T07:37:40.116Z",
 	"ok": true
 }

@@ -433,6 +433,15 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 
 			const bedPoint = P.add( refr.mul( tBed ) );
 
+			// Everything from here to the refraction sample is the *analytic*
+			// bottom, and it is dead the moment refraction is on. Guarded by a
+			// JavaScript `if` rather than left for the shader compiler to
+			// eliminate: it is fourteen octaves of noise plus two Worley lookups
+			// per pixel, and the paired A/B says the refracting build is 1.63 ms
+			// per frame *faster* than the analytic one — a saving that should not
+			// depend on dead-code elimination doing what I assume it does.
+			if ( ! refracting ) {
+
 			// Caustics wash out with depth: the focusing that makes them is destroyed
 			// by the same scattering that limits visibility. Without this term they
 			// were painted at full strength onto every depth, and a lagoon lit at noon
@@ -476,6 +485,8 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 			bedColor.assign( seabedAlbedo( bedPoint.xz, u.seabedColor )
 				.mul( ambient )
 				.mul( float( 1.0 ).add( min( caustic, float( 1.3 ) ).mul( 0.45 ) ) ) );
+
+			}
 
 			// The bottom the viewer actually sees, rather than a second guess at it.
 			//
