@@ -423,10 +423,40 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 			// by the same scattering that limits visibility. Without this term they
 			// were painted at full strength onto every depth, and a lagoon lit at noon
 			// blew the whole frame to cream.
+			//
+			// And a caustic is focused *sunlight*, so anything that blocks the sun
+			// blocks it. The hull's shadow ellipse is already computed below for the
+			// surface; the bottom under her was still being lit at full strength,
+			// which is the giveaway that the caustic is a texture rather than light.
+			// Same ellipse, evaluated at the seabed point instead of the surface
+			// point, because that is where this light would have landed.
+			const bedShadow = float( 1.0 ).toVar( 'bedShadow' );
+
+			If( u.vesselMix.greaterThan( 0.001 ), () => {
+
+				const drop = u.sunDir.xz.div( max( u.sunDir.y, float( 0.30 ) ) )
+					.mul( waterDepth.add( 1.4 ) );
+				const relS = bedPoint.xz.sub( u.vesselPos.xz ).add( drop );
+				const c = u.vesselDir.x, sn = u.vesselDir.y;
+				const local = vec2(
+					relS.x.mul( c ).sub( relS.y.mul( sn ) ),
+					relS.x.mul( sn ).add( relS.y.mul( c ) )
+				).div( u.vesselHalf );
+
+				// Softer than the surface shadow: the penumbra of a hull seen from
+				// the seabed grows with the depth of water it is cast through.
+				const soft = waterDepth.mul( 0.06 ).add( 0.35 );
+				bedShadow.assign( oneMinus(
+					oneMinus( smoothstep( float( 0.55 ), float( 0.55 ).add( soft ), length( local ) ) ).mul( 0.85 )
+				) );
+
+			} );
+
 			const caustic = causticPattern( bedPoint.xz, u.time, float( 1.15 ) )
 				.mul( u.causticStrength )
 				.mul( exp( waterDepth.mul( - 0.11 ) ) )
 				.mul( saturate( u.sunDir.y.mul( 2.0 ) ) )
+				.mul( bedShadow )
 				.toVar( 'caustic' );
 
 			bedColor.assign( seabedAlbedo( bedPoint.xz, u.seabedColor )
