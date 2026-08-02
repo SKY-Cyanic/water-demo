@@ -813,10 +813,15 @@ export class Vessel {
 				.mul( submerged )
 				.toVar( 'vesCaustic' );
 
+			// Scaled by the paint rather than added on top of it. As an independent
+			// glow it was invisible while the water above was opaque, and the moment
+			// refraction made the submerged hull visible from above it read as a
+			// cyan strip lit from inside. Caustics modulate whatever they land on;
+			// dark antifouling catches far less of them than pale sand does.
 			lit.addAssign(
-				u.sunColor.mul( u.waterShallow )
-					.mul( min( caustic, float( 1.5 ) ) )
-					.mul( u.sunIntensity ).mul( 0.85 )
+				paint.mul( u.sunColor )
+					.mul( min( caustic, float( 1.4 ) ) )
+					.mul( u.sunIntensity ).mul( 0.60 )
 			);
 
 			// The gloss the wet band buys: a tight lobe toward the sun, present only

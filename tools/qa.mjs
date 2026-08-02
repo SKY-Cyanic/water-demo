@@ -8,7 +8,7 @@
 //   node tools/qa.mjs smoke                 load, console check, state dump
 //   node tools/qa.mjs shots                 every required capture into qa/
 //   node tools/qa.mjs perf [seconds]        measured FPS at 1920x1080 and 1280x720
-//   node tools/qa.mjs abshafts [seconds]    paired A/B on the underwater shaft march
+//   node tools/qa.mjs abshafts [s] [flag] [view] [preset]   paired A/B on one kill switch
 //   node tools/qa.mjs stress                resize / preset / medium-crossing / hidden-tab
 //   node tools/qa.mjs all [perfSeconds]     everything, writes qa/report.json
 //
@@ -565,9 +565,12 @@ async function stress( chrome ) {
  * the median of the paired differences, not the difference of the medians —
  * the former is what survives a drift, the latter is not.
  */
-async function abShafts( chrome, seconds, rounds = 3 ) {
+async function abShafts( chrome, seconds, rounds = 3, opts = {} ) {
 
-	const arms = { on: '/', off: '/?noshafts=1' };
+	const flag = opts.flag ?? 'noshafts';
+	const view = opts.view ?? 'under';
+	const preset = opts.preset ?? 'calm-lagoon';
+	const arms = { on: '/', off: `/?${flag}=1` };
 	const ms = { on: [], off: [] };
 	const paired = [];
 
@@ -581,15 +584,15 @@ async function abShafts( chrome, seconds, rounds = 3 ) {
 			await chrome.setViewport( 1920, 1080, 1 );
 			await chrome.goto( ORIGIN + arms[ arm ] );
 			await chrome.eval(
-				setState( { preset: 'calm-lagoon', view: 'under', quality: 'high' } )
+				setState( { preset, view, quality: 'high' } )
 				+ '; window.__set({ autoQuality:false })'
 			);
 			await sleep( 4000 );
 
-			const s = await chrome.eval( `window.__perf(${seconds}, "shafts-${arm}-r${r}")` );
+			const s = await chrome.eval( `window.__perf(${seconds}, "${flag}-${arm}-r${r}")` );
 			ms[ arm ].push( s.avgMs );
 			round[ arm ] = s.avgMs;
-			console.log( `  r${r} shafts ${arm.padEnd( 3 )}: ${s.avgFps} fps, ${s.avgMs} ms, 1% low ${s.onePercentLowFps}` );
+				console.log( `  r${r} ${flag} ${arm.padEnd( 3 )}: ${s.avgFps} fps, ${s.avgMs} ms, 1% low ${s.onePercentLowFps}` );
 
 		}
 
@@ -601,9 +604,9 @@ async function abShafts( chrome, seconds, rounds = 3 ) {
 
 	const cost = median( paired );
 	console.log( `  paired deltas (on - off, ms): ${paired.join( ', ' )}` );
-	console.log( `  shaft march costs ${cost} ms/frame (median of paired), off = ${median( ms.off )} ms, on = ${median( ms.on )} ms` );
+	console.log( `  the term costs ${cost} ms/frame (median of paired), off = ${median( ms.off )} ms, on = ${median( ms.on )} ms` );
 
-	return { seconds, rounds, msOn: ms.on, msOff: ms.off, pairedDeltaMs: paired, shaftCostMs: cost };
+	return { flag, view, preset, seconds, rounds, msOn: ms.on, msOff: ms.off, pairedDeltaMs: paired, costMs: cost };
 
 }
 
@@ -817,9 +820,13 @@ try {
 
 	if ( command === 'abshafts' ) {
 
+		// node tools/qa.mjs abshafts [seconds] [flag] [view] [preset]
 		const seconds = Number.isFinite( arg ) && arg > 0 ? arg : 12;
-		console.log( `abshafts (${seconds}s per sample, 3 interleaved rounds) …` );
-		report.abshafts = await abShafts( chrome, seconds );
+		const flag = process.argv[ 4 ] || 'noshafts';
+		const view = process.argv[ 5 ] || 'under';
+		const preset = process.argv[ 6 ] || 'calm-lagoon';
+		console.log( `abshafts (${seconds}s per sample, 3 interleaved rounds, ?${flag}=1, ${preset}/${view}) …` );
+		report.abshafts = await abShafts( chrome, seconds, 3, { flag, view, preset } );
 
 	}
 

@@ -331,6 +331,7 @@ class App {
 			foam: this.foam,
 			spectral: this.spectral?.textures ?? null,
 			propReflection: this.propReflection ? this.propReflection.texture : null,
+			refract: new URLSearchParams( location.search ).get( 'norefract' ) !== '1',
 		} );
 
 		this.ocean = new Ocean( this.env, this.field, geometryInfo, material );
