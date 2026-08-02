@@ -384,6 +384,35 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 			.mul( specD.mul( F ).mul( nDotL ).mul( u.sunIntensity ).mul( SUN_SPEC_SCALE ) )
 			.toVar( 'specular' );
 
+		// Glints, on top of the lobe.
+		//
+		// The GGX lobe above is broad by construction: its roughness is the slope
+		// variance of everything the pixel covers, so it answers "how much light
+		// on average" and cannot answer "and a few facets are pointing exactly at
+		// the sun". Real sunlit water is covered in small hard points of light that
+		// a variance model averages away, and their absence is most of why the
+		// reference's water looks sharp next to ours.
+		//
+		// So a second, very tight lobe. A Blinn exponent of 512 is about a degree
+		// wide — a stand-in for the individual facet, not for the distribution.
+		//
+		// The distance window is the whole reason this is safe, and it is the
+		// opposite way round from intuition. Off inside ten metres, because there
+		// the mesh and the ripple normals resolve the real facets and a synthetic
+		// one would double them. Off again past a few hundred, because by then a
+		// one-degree lobe on a per-pixel normal is pure aliasing — this project has
+		// paid for that lesson twice already. It exists only in the band where the
+		// facets are real but no longer resolvable.
+		const Hv = normalize( V.add( u.sunDir ) ).toVar( 'glintH' );
+		const glintBand = smoothstep( 6.0, 22.0, vRadial )
+			.mul( oneMinus( smoothstep( 160.0, 520.0, vRadial ) ) );
+
+		specular.addAssign( u.sunColor.mul(
+			pow( saturate( dot( N, Hv ) ), float( 512.0 ) )
+				.mul( glintBand ).mul( F ).mul( nDotL )
+				.mul( u.sunIntensity ).mul( u.sparkle ).mul( 3.2 )
+		) );
+
 		/* --- transmission ---------------------------------------------- */
 
 		// Refract along a *smoothed* normal, not the full per-pixel one.

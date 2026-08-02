@@ -28,7 +28,7 @@ export const SCALAR_KEYS = [
 	// water optics
 	'waterClarity', 'absorptionR', 'absorptionG', 'absorptionB',
 	'roughness', 'sssStrength', 'reflectivity', 'varianceRough',
-	'volumeGeom', 'scatterStrength', 'groupStrength', 'bodySunGain',
+	'volumeGeom', 'scatterStrength', 'groupStrength', 'bodySunGain', 'sparkle',
 	// foam
 	'foamAmount', 'foamThreshold', 'foamPersistence', 'foamSharpness',
 	// underwater
@@ -113,6 +113,7 @@ export function defaultParams() {
 			scatterStrength: 0.085,
 			groupStrength: 0.35,
 			bodySunGain: 0.60,
+			sparkle: 0.85,
 			sssStrength: 1.0,        // back-lit wave crest translucency
 			reflectivity: 1.0,
 
@@ -213,6 +214,9 @@ export function createEnv() {
 		// 0 restores the old behaviour, in which the volume was lit by two
 		// constants and every face of every wave came out the same colour.
 		bodySunGain: uniform( 0.60 ),
+
+		// Strength of the tight glint lobe. 0 removes it exactly.
+		sparkle: uniform( 0.85 ),
 		backscatter: uniform( new Vector3( 0.02, 0.05, 0.06 ) ),
 		waveHs: uniform( 1.8 ),
 		sssStrength: uniform( 1 ),
@@ -354,6 +358,7 @@ export function syncUniforms( env, dt = 0 ) {
 	u.volumeGeom.value = p.volumeGeom ?? 1;
 	u.groupStrength.value = p.groupStrength ?? 0.35;
 	u.bodySunGain.value = p.bodySunGain ?? 0.60;
+	u.sparkle.value = p.sparkle ?? 0.85;
 	u.waveHs.value = Math.max( 0.05, p.waveHeight );
 
 	// Backscatter shares the scatter colour's chromaticity — they describe the

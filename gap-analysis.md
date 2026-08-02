@@ -139,7 +139,7 @@ Storm Front에서 가장 크게 벌어지는 항목이고, 정지 화면보다 *
 **좁히는 법**: 이미 `hullSunOcc` 를 갖고 있다. 같은 타원을 해저 카우스틱에도 곱한다.
 **가장 싸다.**
 
-### G8. 미세 스페큘러 밀도 ★★
+### G8. 미세 스페큘러 밀도 ★★ — **완료**
 
 참조 근거리 수면은 작고 날카로운 반짝임이 조밀하다. 우리 것은 더 넓고 뭉툭하다.
 `rippleSlope` 의 미세 옥타브가 30~400 m에서 페이드아웃되는데,
@@ -188,7 +188,45 @@ Storm Front에서 가장 크게 벌어지는 항목이고, 정지 화면보다 *
 - 1080p Open Sea는 양쪽 arm 모두 깨끗한 60 fps. 앞서 걱정한 "복사 때문에 52.8"은
   데워진 기계였다.
 
-**남은 것**: G5(SSR), G6(항적 변위), G8(미세 스페큘러).
+- **G8** — 공개 문서가 정확히 알려줬다: 별도의 `sparkle` 항이고
+  *"A view-dependent specular highlight scaled by the surface normal, with
+  distance-based fade"*, `power: 512`, `minDistance: 10`, `fadeDistance: 500`.
+  우리 GGX 로브는 픽셀이 덮는 경사 **분산**이라 "평균적으로 얼마나 밝은가"에
+  답할 뿐 "몇 개 면이 정확히 태양을 향한다"에는 답할 수 없다. 지수 512(약 1°)의
+  둘째 로브를 얹었다.
+  **거리 창이 이 항을 안전하게 만드는 전부이고, 방향이 직관과 반대다** —
+  근거리에서는 끄고(메시와 잔물결이 실제 면을 이미 해상한다) 원거리에서도 끈다
+  (1° 로브를 픽셀 법선에 걸면 순수 앨리어싱이다). 면이 실재하지만 더는 해상되지
+  않는 띠에만 존재한다. 플리커 회귀 없음(3.17 % / 0.303 % / 10.90 %).
+
+## 3c. 공개 문서 전면 스캔에서 얻은 남은 격차 사양 (39개 페이지)
+
+### G6 — 항적은 **격자 위의 실제 높이장**이다
+
+문서가 구조를 그대로 준다. 우리 것(포말 히스토리에만 존재)과 종류가 다르다.
+
+- `resolution: 512` 텍셀/변, `worldSize: 700` m, **카메라 중심**
+- 물체는 `addGenerator(Object3D)`로 등록, 프레임당 최대 16개가 주입
+- `depth: 1.2` m — *"Hull depth. The only control of wake amplitude"*
+- `radius: 4.0` m — *"Footprint radius over the swept path. Controls the wake width"*
+- `friction: 0.25` — *"Velocity damping. Higher values produce a shorter, more damped trail"*
+- `foamBreakThreshold` — **`|∇h|`가 임계를 넘으면** 포말 침착
+- `teleportThreshold: 5.0` m — 큰 프레임 간 이동은 순간이동으로 처리
+- 높이장이라 **부력이 그것을 읽는다** — 물체가 서로의 항적에 반응한다
+
+즉 해석적 켈빈 도형이 아니라 **감쇠 파동방정식을 푸는 512² 핑퐁 필드**다.
+포말은 그 필드의 기울기에서 파생되지 별도로 그리지 않는다.
+우리가 만들 것도 같은 형태여야 한다 — 그러면 켈빈 각이 저절로 나온다.
+
+### G5 — SSR
+
+- `strength: 0.8` — 하늘 반사 대비 블렌드 비율
+- `thickness: 0.1` — *"Depth-ratio threshold that rejects false reflections from
+  geometry close in front of the water"* (우리가 굴절에서 쓴 깊이 거부와 같은 종류)
+- `maxDistance` / `stepCount` — 품질 티어가 정하고, 티어를 바꾸면 수동값이 초기화됨
+- **high/ultra 전용**, 수중에서는 자동 비활성
+
+**남은 것**: G5(SSR), G6(항적 변위).
 
 ## 4. 권고 순서
 
