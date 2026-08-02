@@ -28,7 +28,7 @@ export const SCALAR_KEYS = [
 	// water optics
 	'waterClarity', 'absorptionR', 'absorptionG', 'absorptionB',
 	'roughness', 'sssStrength', 'reflectivity', 'varianceRough',
-	'volumeGeom', 'scatterStrength', 'groupStrength', 'bodySunGain', 'sparkle',
+	'volumeGeom', 'scatterStrength', 'groupStrength', 'bodySunGain', 'sparkle', 'scatterSat',
 	// foam
 	'foamAmount', 'foamThreshold', 'foamPersistence', 'foamSharpness',
 	// underwater
@@ -114,6 +114,7 @@ export function defaultParams() {
 			groupStrength: 0.35,
 			bodySunGain: 0.60,
 			sparkle: 0.85,
+			scatterSat: 1.0,
 			sssStrength: 1.0,        // back-lit wave crest translucency
 			reflectivity: 1.0,
 
@@ -217,6 +218,10 @@ export function createEnv() {
 
 		// Strength of the tight glint lobe. 0 removes it exactly.
 		sparkle: uniform( 0.85 ),
+
+		// How much the upwelling scatter is scaled by the single-scattering albedo
+		// it was computed from. 0 restores the unscaled constant exactly.
+		scatterSat: uniform( 1.0 ),
 		backscatter: uniform( new Vector3( 0.02, 0.05, 0.06 ) ),
 		waveHs: uniform( 1.8 ),
 		sssStrength: uniform( 1 ),
@@ -359,6 +364,7 @@ export function syncUniforms( env, dt = 0 ) {
 	u.groupStrength.value = p.groupStrength ?? 0.35;
 	u.bodySunGain.value = p.bodySunGain ?? 0.60;
 	u.sparkle.value = p.sparkle ?? 0.85;
+	u.scatterSat.value = p.scatterSat ?? 1.0;
 	u.waveHs.value = Math.max( 0.05, p.waveHeight );
 
 	// Backscatter shares the scatter colour's chromaticity — they describe the

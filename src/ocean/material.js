@@ -730,9 +730,30 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 		// Volume colour = the authored deep/shallow gradient under direct light,
 		// plus upwelling scattered skylight. The second term is what ties the
 		// water's colour to the sky, so a preset change moves both together.
+		// The albedo's *magnitude* is the fraction of light that goes in and comes
+		// back out. We compute it, divide it away to keep only the hue, and then
+		// add an upwelling term at a fixed 0.80 that has nothing to do with it.
+		//
+		// That constant is why the sea was one flat blue from the foreground to
+		// the horizon. Fresnel does grade correctly — about 14% reflection looking
+		// down at the near water, 64% at the mid-distance — but a gradient is only
+		// visible if its two ends differ, and here a bright blue body was being
+		// mixed into a pale blue sky. Deep ocean is nearly black; that is what
+		// makes the Fresnel ramp read as dark near and silver far, and it is most
+		// of what separates a photograph from a rendering.
+		//
+		// So the scatter is scaled by the albedo it was derived from. Open water,
+		// where blue albedo is about a half and red a twentieth, goes dark. Only
+		// on the deep path: over a bathymetry the bottom dominates through T and
+		// the lagoons must stay where they are, which is also the check.
+		const albedoMag = max( albedo.r, max( albedo.g, albedo.b ) ).toVar( 'albedoMag' );
+		const scatterScale = mix(
+			float( 1.0 ), saturate( albedoMag ), gDeep.mul( u.scatterSat )
+		).toVar( 'scatterScale' );
+
 		const volume = mix( u.waterShallow, u.waterDeep, depthNorm ).mul( bodyLight )
 			.mul( mix( vec3( 1.0 ), tint, gDeep ) )
-			.add( u.waterScatter.mul( skyLight ).mul( 0.80 ).mul( skyOcc ) )
+			.add( u.waterScatter.mul( skyLight ).mul( 0.80 ).mul( skyOcc ).mul( scatterScale ) )
 			.toVar( 'volume' );
 
 		const behind = refracting ? refracted : bedColor;
