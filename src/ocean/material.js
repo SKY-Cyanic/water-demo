@@ -22,7 +22,7 @@ import {
 	Fn, If, abs, cameraPosition, dFdx, dFdy, dot, exp, faceDirection, float, fwidth, length, max, min, mix,
 	mx_fractal_noise_float, normalize, oneMinus, positionGeometry, positionWorld, pow, reflect,
 	refract, saturate, screenUV, smoothstep, step, texture, varyingProperty, vec2, vec3,
-	linearDepth, viewportDepthTexture, viewportSharedTexture,
+	cameraFar, cameraNear, linearDepth, viewportDepthTexture, viewportSharedTexture,
 } from 'three/tsl';
 
 import { createWaveEvaluator, foamFromJacobian } from './waves.js';
@@ -488,65 +488,84 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 
 			}
 
-			// The bottom the viewer actually sees, rather than a second guess at it.
-			//
-			// A seabed mesh is already in the scene and already rendered — with real
-			// geometry, real shading and real caustics — and then this shader drew an
-			// opaque surface straight over it and rebuilt the bottom from noise. We
-			// were rendering the bottom twice and shipping the worse one. The
-			// analytic version cannot hold the dynamic range (its albedo spans 0.30
-			// to 0.52 of the sand colour, where a real reef runs from near-black
-			// channels to bright sand), it has no shadows, and it cannot show a
-			// submerged object at all — which is why the hull disappeared below the
-			// waterline when seen from above.
-			//
-			// So: sample the frame behind this pixel, displaced by where the
-			// refracted ray actually comes up. The lateral shift is metres at the
-			// bottom, turned into screen UV by dividing by the view distance — a
-			// metre at distance d subtends roughly 1/d of the frame. Clamped,
-			// because a grazing ray's shift goes to infinity and would drag colour
-			// in from the far side of the screen.
-			if ( refracting ) {
-
-				const lateral = refr.xz.div( max( refr.y.negate(), float( 0.28 ) ) )
-					.mul( tBed ).toVar( 'refrLateral' );
-
-				const shift = lateral.mul( float( 0.30 ).div( max( viewDist, float( 1.0 ) ) ) );
-				const clamped = shift.div( max( length( shift ).div( 0.06 ), float( 1.0 ) ) );
-
-				// Taper the shift to nothing at the frame border. `saturate` pins an
-				// out-of-range lookup to the edge row, so every pixel along the bottom
-				// of the frame read the same texel and the refraction came out as
-				// vertical streaks. There is no information outside the frame to
-				// refract; the honest thing is to stop bending near the edge.
-				const border = smoothstep( 0.0, 0.05, screenUV.x )
-					.mul( smoothstep( 1.0, 0.95, screenUV.x ) )
-					.mul( smoothstep( 0.0, 0.05, screenUV.y ) )
-					.mul( smoothstep( 1.0, 0.95, screenUV.y ) );
-
-				const shifted = saturate( screenUV.add( clamped.mul( border ) ) ).toVar( 'refrUV' );
-
-				// Reject a sample that turns out to be in *front* of the water.
-				//
-				// Nothing constrains the shifted lookup to land on submerged
-				// geometry: at the waterline it happily reads the hull's topsides and
-				// smears them down into the sea, which showed up immediately as a
-				// bright band under the boat. The depth buffer answers the only
-				// question that matters — is what I just sampled behind me? — and a
-				// comparison needs far less precision than a distance would, so this
-				// survives a hundred-kilometre far plane where reconstructing the
-				// actual separation would not.
-				const dHere = linearDepth().toVar( 'refrDepthHere' );
-				const dThere = linearDepth( viewportDepthTexture( shifted ) ).toVar( 'refrDepthThere' );
-				const behind = step( dHere, dThere ).toVar( 'refrBehind' );
-
-				const uv = mix( screenUV, shifted, behind ).toVar( 'refrFinalUV' );
-
-				bedColor.assign( viewportSharedTexture( uv ).rgb );
-
-			}
 
 		} );
+
+		// The scene the viewer actually sees through the water, rather than a
+		// second guess at it — and for every preset, not only the two with a
+		// bathymetry.
+		//
+		// A seabed mesh was already in the scene and already rendered, with real
+		// geometry, real shading and real caustics, and this shader drew an opaque
+		// surface over it and rebuilt the bottom from noise. But gating that on
+		// `seabedMix` was only half the correction. Eight of the ten presets have
+		// no bottom and were paying for the framebuffer copy `viewportSharedTexture`
+		// forces every frame while getting nothing back for it — and the hull below
+		// the waterline stayed invisible in all of them, which is not a seabed
+		// question at all. Anything submerged is behind the water.
+		//
+		// So the thickness comes from the depth buffer instead of the bathymetry.
+		// `linearDepth` is orthographic-normalised, so undoing the normalisation
+		// gives view-Z in metres, and the ratio to this fragment's own view-Z turns
+		// the separation into distance along the ray. Where nothing is behind, the
+		// separation is enormous, transmittance goes to zero and the result is the
+		// pure volume colour — the open-ocean case falls out of the general one
+		// rather than being a branch beside it.
+		const refracted = vec3( 0.0 ).toVar( 'refracted' );
+		const thickness = float( 0.0 ).toVar( 'waterThickness' );
+
+		if ( refracting ) {
+
+			// Lateral shift of whatever is behind, in metres, turned into screen UV
+			// by dividing by the view distance — a metre at distance d subtends
+			// roughly 1/d of the frame. Clamped, because a grazing ray's shift goes
+			// to infinity and would drag colour in from the far side of the screen.
+			//
+			// Scaled by the *analytic* depth where there is one and by a fixed near
+			// layer where there is not: the shift has to be chosen before the
+			// thickness is known, since the thickness depends on where the sample
+			// lands. One metre of assumed relief is enough to bend the hull.
+			const bend = mix( float( 1.0 ), tBed, u.seabedMix ).toVar( 'refrBend' );
+			const lateral = refr.xz.div( max( refr.y.negate(), float( 0.28 ) ) ).mul( bend );
+
+			const shift = lateral.mul( float( 0.30 ).div( max( viewDist, float( 1.0 ) ) ) );
+			const clamped = shift.div( max( length( shift ).div( 0.06 ), float( 1.0 ) ) );
+
+			// Taper to nothing at the frame border. `saturate` pins an out-of-range
+			// lookup to the edge row, so every pixel along the bottom of the frame
+			// read the same texel and the refraction came out as vertical streaks.
+			// There is no information outside the frame; the honest thing is to stop
+			// bending near the edge.
+			const border = smoothstep( 0.0, 0.05, screenUV.x )
+				.mul( smoothstep( 1.0, 0.95, screenUV.x ) )
+				.mul( smoothstep( 0.0, 0.05, screenUV.y ) )
+				.mul( smoothstep( 1.0, 0.95, screenUV.y ) );
+
+			const shifted = saturate( screenUV.add( clamped.mul( border ) ) ).toVar( 'refrUV' );
+
+			// Reject a sample that turns out to be in *front* of the water. Nothing
+			// constrains the shifted lookup to land on submerged geometry: at the
+			// waterline it happily read the hull's topsides and smeared them down
+			// into the sea, which showed up at once as a bright band under the boat.
+			const dHere = linearDepth().toVar( 'refrDepthHere' );
+			const dShift = linearDepth( viewportDepthTexture( shifted ) ).toVar( 'refrDepthShift' );
+			const ok = step( dHere, dShift ).toVar( 'refrBehind' );
+
+			const uv = mix( screenUV, shifted, ok ).toVar( 'refrFinalUV' );
+			const dThere = mix( linearDepth( viewportDepthTexture( screenUV ) ), dShift, ok )
+				.toVar( 'refrDepthThere' );
+
+			refracted.assign( viewportSharedTexture( uv ).rgb );
+
+			// Both depths back into metres of view-Z, then along the ray.
+			const span = cameraFar.sub( cameraNear );
+			const zHere = dHere.mul( span ).add( cameraNear ).toVar( 'refrZHere' );
+			const zThere = dThere.mul( span ).add( cameraNear );
+
+			thickness.assign( max( zThere.sub( zHere ), float( 0.0 ) )
+				.mul( viewDist.div( max( zHere, float( 0.05 ) ) ) ) );
+
+		}
 
 		const pathLen = mix( maxPath, tBed, u.seabedMix ).toVar( 'pathLen' );
 
@@ -616,8 +635,18 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 		).toVar( 'skyOcc' );
 
 
-		// Beer-Lambert: how much of the bottom survives the water column.
-		const T = transmittance( u.absorption, pathLen ).mul( u.seabedMix ).toVar( 'T' );
+		// Beer-Lambert: how much of whatever is behind survives the water column.
+		//
+		// Over a bathymetry the path is the analytic one, which is validated and
+		// which the depth buffer cannot beat at grazing angles. Everywhere else it
+		// is the depth-derived thickness, so a submerged hull one metre under shows
+		// through and open water two hundred metres deep does not. `× seabedMix`
+		// used to sit here and is gone: it was the assumption that the only thing
+		// ever behind the water is a seabed.
+		const optical = mix( thickness, pathLen, u.seabedMix ).toVar( 'optical' );
+		const T = ( refracting
+			? transmittance( u.absorption, optical )
+			: transmittance( u.absorption, pathLen ).mul( u.seabedMix ) ).toVar( 'T' );
 
 		// Light reaching the volume. `ambient` alone is a *constant* — so until
 		// this term existed the body colour was identical on every face of every
@@ -654,7 +683,8 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 			.add( u.waterScatter.mul( skyLight ).mul( 0.80 ).mul( skyOcc ) )
 			.toVar( 'volume' );
 
-		const body = bedColor.mul( T ).add( volume.mul( oneMinus( T ) ) ).toVar( 'body' );
+		const behind = refracting ? refracted : bedColor;
+		const body = behind.mul( T ).add( volume.mul( oneMinus( T ) ) ).toVar( 'body' );
 
 		/* --- contact with the vessel ----------------------------------- */
 
