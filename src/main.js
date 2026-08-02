@@ -18,6 +18,7 @@ import { DEFAULT_PRESET, PRESETS, PresetMixer } from './env/presets.js';
 import { GEOMETRY_TIERS, createOceanGeometry } from './ocean/geometry.js';
 import { WaveField } from './ocean/waves.js';
 import { FOAM_TIERS, FoamHistory } from './ocean/foam.js';
+import { WAKE_TIERS, WakeField } from './ocean/wake.js';
 import { SPECTRAL_TIERS, SpectralOcean } from './ocean/spectral.js';
 import { Ocean, createOceanMaterial } from './ocean/material.js';
 import { Buoys } from './props/buoys.js';
@@ -30,10 +31,10 @@ import { FlyControls } from './input/controls.js';
 import { Hud, Panel } from './ui/panel.js';
 
 const QUALITY = {
-	low: { geometry: 'low', foam: 'low', waves: 14, cloudOctaves: 3, dpr: DPR_CAP.low, foamHistory: false, particles: 900, volumetricClouds: false, cloudSteps: 0, bloom: false },
-	medium: { geometry: 'medium', foam: 'medium', waves: 18, cloudOctaves: 4, dpr: DPR_CAP.medium, foamHistory: true, particles: 1800, volumetricClouds: true, cloudSteps: 16, bloom: true },
-	high: { geometry: 'high', foam: 'high', waves: 20, cloudOctaves: 5, dpr: DPR_CAP.high, foamHistory: true, particles: 2600, volumetricClouds: true, cloudSteps: 24, bloom: true },
-	ultra: { geometry: 'ultra', foam: 'ultra', waves: 24, cloudOctaves: 6, dpr: DPR_CAP.ultra, foamHistory: true, particles: 4200, volumetricClouds: true, cloudSteps: 36, bloom: true },
+	low: { geometry: 'low', foam: 'low', waves: 14, cloudOctaves: 3, dpr: DPR_CAP.low, foamHistory: false, particles: 900, volumetricClouds: false, cloudSteps: 0, bloom: false, wake: 'low' },
+	medium: { geometry: 'medium', foam: 'medium', waves: 18, cloudOctaves: 4, dpr: DPR_CAP.medium, foamHistory: true, particles: 1800, volumetricClouds: true, cloudSteps: 16, bloom: true, wake: 'medium' },
+	high: { geometry: 'high', foam: 'high', waves: 20, cloudOctaves: 5, dpr: DPR_CAP.high, foamHistory: true, particles: 2600, volumetricClouds: true, cloudSteps: 24, bloom: true, wake: 'high' },
+	ultra: { geometry: 'ultra', foam: 'ultra', waves: 24, cloudOctaves: 6, dpr: DPR_CAP.ultra, foamHistory: true, particles: 4200, volumetricClouds: true, cloudSteps: 36, bloom: true, wake: 'ultra' },
 };
 
 const WAVE_SEED = 20250731;
@@ -325,6 +326,12 @@ class App {
 
 		}
 
+		// Before the material: the surface samples the field this owns.
+		const wakeTier = WAKE_TIERS[ QUALITY[ this.quality ].wake ];
+		this.wake = wakeTier && new URLSearchParams( location.search ).get( 'nowake' ) !== '1'
+			? new WakeField( this.env, wakeTier )
+			: null;
+
 		const material = createOceanMaterial( this.env, this.field, {
 			reflection: this.skyFns.reflection,
 			aerial: this.skyFns.aerial,
@@ -333,6 +340,7 @@ class App {
 			spectral: this.spectral?.textures ?? null,
 			propReflection: this.propReflection ? this.propReflection.texture : null,
 			refract: new URLSearchParams( location.search ).get( 'norefract' ) !== '1',
+			wake: this.wake,
 		} );
 
 		this.ocean = new Ocean( this.env, this.field, geometryInfo, material );
@@ -399,6 +407,13 @@ class App {
 
 			this.scene.remove( this.buoys.mesh );
 			this.buoys.dispose();
+
+		}
+
+		if ( this.wake ) {
+
+			this.wake.dispose();
+			this.wake = null;
 
 		}
 
@@ -656,10 +671,34 @@ class App {
 
 	}
 
+	/**
+	 * Who is displacing water this frame.
+	 *
+	 * Radius is the hull's footprint over its swept path rather than its beam:
+	 * the field is solved on a 1.4 m grid and a footprint narrower than a couple
+	 * of texels injects into a single cell, which rings rather than spreads.
+	 */
+	wakeGenerators() {
+
+		if ( ! this.vessel ) return [];
+
+		const p = this.env.u.vesselPos.value;
+		return [ { x: p.x, z: p.z, radius: 5.5, depth: 0.85 } ];
+
+	}
+
 	render() {
 
 		// Spectral cascades first: everything downstream samples their textures.
 		if ( this.spectral ) this.spectral.update( this.waveTime, this.env.params );
+
+		// The wake field before the foam, because the foam's wake deposit and the
+		// surface displacement both read what this pass writes.
+		if ( this.wake && ! this.paused ) {
+
+			this.wake.update( this.renderer, this.camera, this._frameDt, this.wakeGenerators() );
+
+		}
 
 		// Foam history second: the surface samples the texture this pass writes.
 		if ( this.foam && ! this.paused ) this.foam.update( this.renderer, this.camera, this._frameDt );

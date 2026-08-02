@@ -139,6 +139,11 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 
 			}
 
+			// The wake field, added to the spectrum rather than mixed with it: it is
+			// a separate disturbance travelling on the same surface, not a
+			// modification of the sea state.
+			if ( opts.wake ) disp.y.addAssign( opts.wake.sample( restWorld ) );
+
 			vHeight.assign( disp.y );
 			vNormal.assign( normalize( vec3( slope.x.negate(), 1.0, slope.y.negate() ) ) );
 
@@ -258,6 +263,24 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 		} else {
 
 			grad.addAssign( rippleSlope( P.xz, u.time, u.windDir, u.detailStrength, vRadial ) );
+
+		}
+
+		// Wake slope. Central differences on the field rather than a derivative of
+		// the varying: the vertex spacing near the camera is metres, so an
+		// interpolated height carries no gradient at the scale the wake lives at.
+		const wakeSlope = vec2( 0, 0 ).toVar( 'wakeSlope' );
+
+		if ( opts.wake ) {
+
+			const e = float( opts.wake.world / opts.wake.size );
+			const hx = opts.wake.sample( vRestXZ.add( vec2( e, 0 ) ) )
+				.sub( opts.wake.sample( vRestXZ.sub( vec2( e, 0 ) ) ) );
+			const hz = opts.wake.sample( vRestXZ.add( vec2( 0, e ) ) )
+				.sub( opts.wake.sample( vRestXZ.sub( vec2( 0, e ) ) ) );
+
+			wakeSlope.assign( vec2( hx, hz ).div( e.mul( 2.0 ) ) );
+			grad.addAssign( wakeSlope );
 
 		}
 
@@ -818,6 +841,18 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 		).mul( 0.5 ).add( 0.5 ).toVar( 'foamPatch' );
 
 		const foamRaw = crestMask.mul( u.foamAmount ).toVar( 'foamRaw' );
+
+		// Wake foam comes off the field's own steepness rather than being drawn.
+		// A solved surface already knows where it is breaking; deriving the foam
+		// from |grad h| means the white is always on the disturbance that made it,
+		// including where two wakes cross and neither shape would have predicted it.
+		if ( opts.wake ) {
+
+			foamRaw.assign( max( foamRaw,
+				smoothstep( 0.10, 0.42, length( wakeSlope ) ).mul( 0.55 ).mul( u.foamAmount )
+			) );
+
+		}
 
 		// Windrows — the third foam layer, and the one that was missing.
 		//

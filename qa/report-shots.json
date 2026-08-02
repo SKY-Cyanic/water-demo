@@ -1,7 +1,7 @@
 {
 	"command": "shots",
 	"origin": "http://localhost:8173",
-	"startedAt": "2026-08-02T09:30:16.761Z",
+	"startedAt": "2026-08-02T09:39:57.758Z",
 	"userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
 	"shots": {
 		"qa-open-sea.png": "qa/qa-open-sea.png",
@@ -27,6 +27,6 @@
 		"fallbackBackend": "WebGL 2",
 		"fallbackErrors": []
 	},
-	"finishedAt": "2026-08-02T09:31:31.555Z",
+	"finishedAt": "2026-08-02T09:40:42.621Z",
 	"ok": true
 }
