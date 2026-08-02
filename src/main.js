@@ -340,6 +340,10 @@ class App {
 			spectral: this.spectral?.textures ?? null,
 			propReflection: this.propReflection ? this.propReflection.texture : null,
 			refract: new URLSearchParams( location.search ).get( 'norefract' ) !== '1',
+			// SSR is high/ultra only, as the march is the most expensive thing the
+			// surface does and the lower tiers exist to not do that.
+			ssr: ( this.quality === 'high' || this.quality === 'ultra' )
+				&& new URLSearchParams( location.search ).get( 'nossr' ) !== '1',
 			wake: this.wake,
 		} );
 

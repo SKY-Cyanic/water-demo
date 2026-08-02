@@ -28,7 +28,7 @@ export const SCALAR_KEYS = [
 	// water optics
 	'waterClarity', 'absorptionR', 'absorptionG', 'absorptionB',
 	'roughness', 'sssStrength', 'reflectivity', 'varianceRough',
-	'volumeGeom', 'scatterStrength', 'groupStrength', 'bodySunGain', 'sparkle', 'scatterSat',
+	'volumeGeom', 'scatterStrength', 'groupStrength', 'bodySunGain', 'sparkle', 'scatterSat', 'ssrStrength',
 	// foam
 	'foamAmount', 'foamThreshold', 'foamPersistence', 'foamSharpness',
 	// underwater
@@ -115,6 +115,7 @@ export function defaultParams() {
 			bodySunGain: 0.60,
 			sparkle: 0.85,
 			scatterSat: 1.0,
+			ssrStrength: 0.8,
 			sssStrength: 1.0,        // back-lit wave crest translucency
 			reflectivity: 1.0,
 
@@ -222,6 +223,9 @@ export function createEnv() {
 		// How much the upwelling scatter is scaled by the single-scattering albedo
 		// it was computed from. 0 restores the unscaled constant exactly.
 		scatterSat: uniform( 1.0 ),
+
+		// Blend of the screen-space hit against the procedural sky.
+		ssrStrength: uniform( 0.8 ),
 		backscatter: uniform( new Vector3( 0.02, 0.05, 0.06 ) ),
 		waveHs: uniform( 1.8 ),
 		sssStrength: uniform( 1 ),
@@ -365,6 +369,7 @@ export function syncUniforms( env, dt = 0 ) {
 	u.bodySunGain.value = p.bodySunGain ?? 0.60;
 	u.sparkle.value = p.sparkle ?? 0.85;
 	u.scatterSat.value = p.scatterSat ?? 1.0;
+	u.ssrStrength.value = p.ssrStrength ?? 0.8;
 	u.waveHs.value = Math.max( 0.05, p.waveHeight );
 
 	// Backscatter shares the scatter colour's chromaticity — they describe the

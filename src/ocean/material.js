@@ -19,10 +19,11 @@
 
 import { DoubleSide, FrontSide, Mesh, MeshBasicNodeMaterial } from 'three/webgpu';
 import {
-	Fn, If, abs, cameraPosition, dFdx, dFdy, dot, exp, faceDirection, float, fwidth, length, max, min, mix,
+	Fn, If, abs, cameraPosition, dFdx, dFdy, dot, exp, faceDirection, float, fract, fwidth, length, max, min, mix,
 	mx_fractal_noise_float, normalize, oneMinus, positionGeometry, positionWorld, pow, reflect,
 	refract, saturate, screenUV, smoothstep, step, texture, varyingProperty, vec2, vec3,
-	cameraFar, cameraNear, linearDepth, viewportDepthTexture, viewportSharedTexture,
+	cameraFar, cameraNear, cameraProjectionMatrix, cameraViewMatrix, linearDepth,
+	viewportDepthTexture, viewportSharedTexture, vec4,
 } from 'three/tsl';
 
 import { createWaveEvaluator, foamFromJacobian } from './waves.js';
@@ -33,6 +34,11 @@ import { causticPattern, fresnelSchlick, ggxSpecular, liftReflection, rippleSlop
 // at glitter-track roughness peaks around 3 — i.e. bright enough for ACES to
 // roll it to white without the surrounding water blowing out.
 const SUN_SPEC_SCALE = 0.22;
+
+/** Screen-space reflection march. */
+const SSR_STEPS = 10;
+const SSR_DISTANCE = 90.0;
+const SSR_THICKNESS = 0.0009;
 
 /**
  * @param {object} env
@@ -173,6 +179,16 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 	/* ----------------------------------------------------------- fragment */
 
 	material.colorNode = Fn( () => {
+
+		// One node each, sampled many times.
+		//
+		// `viewportDepthTexture(uv)` and `viewportSharedTexture(uv)` each *create*
+		// a texture node, and the SSR march is an unrolled loop: calling them per
+		// step produced twenty separate bindings and the pipeline layout was
+		// rejected outright. The failure surfaces as "Invalid PipelineLayout" with
+		// no mention of textures, so it is worth naming here.
+		const sceneDepthTex = refracting ? viewportDepthTexture() : null;
+		const sceneColorTex = refracting ? viewportSharedTexture() : null;
 
 		const P = positionWorld;
 		const toEye = cameraPosition.sub( P ).toVar( 'toEye' );
@@ -362,6 +378,79 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 
 		const R = liftReflection( reflect( V.negate(), N ) ).toVar( 'R' );
 		const reflection = sky.reflection( R, reflBlur ).toVar( 'reflection' );
+
+		// Screen-space reflections.
+		//
+		// Until now the only thing the sea reflected was the procedural sky, plus
+		// a planar pass for the boat confined to forty metres. Everything else in
+		// the scene — the seabed's shoals breaking the surface, another hull, the
+		// buoys — simply was not in the water. On a real sea the reflection is
+		// where most of the large-scale tonal variation comes from.
+		//
+		// March the reflected ray, project each step to the screen, and compare
+		// its own depth against what the depth buffer says is there. Same two
+		// pieces the refraction already uses, pointed the other way.
+		if ( refracting && opts.ssr !== false ) {
+
+			// screenUV is texture convention, y downward; NDC is y upward. That is
+			// trap 6 in research.md, and it is exactly the kind of thing that
+			// produces a plausible-looking but vertically mirrored result rather
+			// than an error.
+			const toScreen = ( p ) => {
+
+				const clip = cameraProjectionMatrix.mul( cameraViewMatrix ).mul( vec4( p, 1.0 ) ).toVar();
+				const ndc = clip.xy.div( max( clip.w, float( 1e-4 ) ) );
+				return vec4( ndc.x.mul( 0.5 ).add( 0.5 ), ndc.y.mul( - 0.5 ).add( 0.5 ), clip.w, 0.0 );
+
+			};
+
+			const span = cameraFar.sub( cameraNear );
+			const stepLen = float( SSR_DISTANCE / SSR_STEPS );
+
+			// Same low-discrepancy offset the other marches use, so eight steps do
+			// not band into visible shells.
+			const jit = fract( float( 52.9829189 ).mul( fract(
+				screenUV.x.mul( 0.06711056 * 1920.0 ).add( screenUV.y.mul( 0.00583715 * 1080.0 ) )
+			) ) );
+
+			const hitCol = vec3( 0.0 ).toVar( 'ssrCol' );
+			const hit = float( 0.0 ).toVar( 'ssrHit' );
+
+			for ( let i = 0; i < SSR_STEPS; i ++ ) {
+
+				const t = stepLen.mul( jit.add( i + 1 ) );
+				const sp = toScreen( P.add( R.mul( t ) ) ).toVar( `ssrP${ i }` );
+
+				// Behind the camera, or off screen: nothing to find.
+				const onScreen = step( 0.02, sp.x ).mul( step( sp.x, 0.98 ) )
+					.mul( step( 0.02, sp.y ) ).mul( step( sp.y, 0.98 ) )
+					.mul( step( 0.01, sp.z ) );
+
+				const rayLin = sp.z.sub( cameraNear ).div( span );
+				const sceneLin = linearDepth( sceneDepthTex.sample( sp.xy ) );
+
+				// The ray has passed behind something, and not by more than the
+				// thickness we are willing to believe is a surface rather than a
+				// gap we should have marched through.
+				const gap = rayLin.sub( sceneLin );
+				const found = step( 0.0, gap ).mul( step( gap, float( SSR_THICKNESS ) ) )
+					.mul( onScreen ).mul( oneMinus( hit ) );
+
+				hitCol.assign( mix( hitCol, sceneColorTex.sample( sp.xy ).rgb, found ) );
+				hit.assign( max( hit, found ) );
+
+			}
+
+			// Fade at the frame border, because a reflection that ends at the edge
+			// of the screen is the giveaway of the whole technique, and give way to
+			// roughness for the reason the boat's reflection does — a mirror image
+			// only survives on water smooth enough to hold it.
+			const fade = smoothstep( 0.0, 0.12, screenUV.y )
+				.mul( oneMinus( saturate( rough.mul( 2.6 ) ) ) );
+
+			reflection.assign( mix( reflection, hitCol, hit.mul( fade ).mul( u.ssrStrength ) ) );
+
+		}
 
 		if ( opts.propReflection ) {
 
@@ -600,14 +689,14 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 			// waterline it happily read the hull's topsides and smeared them down
 			// into the sea, which showed up at once as a bright band under the boat.
 			const dHere = linearDepth().toVar( 'refrDepthHere' );
-			const dShift = linearDepth( viewportDepthTexture( shifted ) ).toVar( 'refrDepthShift' );
+			const dShift = linearDepth( sceneDepthTex.sample( shifted ) ).toVar( 'refrDepthShift' );
 			const ok = step( dHere, dShift ).toVar( 'refrBehind' );
 
 			const uv = mix( screenUV, shifted, ok ).toVar( 'refrFinalUV' );
-			const dThere = mix( linearDepth( viewportDepthTexture( screenUV ) ), dShift, ok )
+			const dThere = mix( linearDepth( sceneDepthTex.sample( screenUV ) ), dShift, ok )
 				.toVar( 'refrDepthThere' );
 
-			refracted.assign( viewportSharedTexture( uv ).rgb );
+			refracted.assign( sceneColorTex.sample( uv ).rgb );
 
 			// Both depths back into metres of view-Z, then along the ray.
 			const span = cameraFar.sub( cameraNear );
