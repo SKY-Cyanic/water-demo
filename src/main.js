@@ -21,6 +21,7 @@ import { FOAM_TIERS, FoamHistory } from './ocean/foam.js';
 import { SPECTRAL_TIERS, SpectralOcean } from './ocean/spectral.js';
 import { Ocean, createOceanMaterial } from './ocean/material.js';
 import { Buoys } from './props/buoys.js';
+import { Spray } from './props/spray.js';
 import { Vessel } from './props/vessel.js';
 import { PropReflection } from './props/reflection.js';
 import { UnderwaterPipeline } from './underwater/pipeline.js';
@@ -349,6 +350,11 @@ class App {
 			// collar, the shadow cast into the column — is driven from uniforms the
 			// vessel writes, so it has to exist before the surface material is asked
 			// to shade a frame.
+			// Spray needs the cascades to know where a crest is breaking, so like
+			// the vessel it exists only on the spectral path.
+			this.spray = new Spray( this.env, this.spectral.textures );
+			this.scene.add( this.spray.points );
+
 			this.vessel = new Vessel( this.env, this.spectral.textures );
 			this.scene.add( this.vessel.mesh );
 			this.env.u.vesselMix.value = 1;
@@ -393,6 +399,14 @@ class App {
 
 			this.scene.remove( this.buoys.mesh );
 			this.buoys.dispose();
+
+		}
+
+		if ( this.spray ) {
+
+			this.scene.remove( this.spray.points );
+			this.spray.dispose();
+			this.spray = null;
 
 		}
 
@@ -630,6 +644,7 @@ class App {
 		}
 
 		this.buoys?.update( this.camera );
+		this.spray?.update( this.camera );
 		this.vessel?.update( this.camera, this.paused ? 0 : this._frameDt );
 		this.seabed?.update( this.camera );
 		this.particles?.update( this.camera, dt, this.underwaterFactor );

@@ -760,6 +760,43 @@ export function createOceanMaterial( env, field, sky, opts = {} ) {
 
 		const foamRaw = crestMask.mul( u.foamAmount ).toVar( 'foamRaw' );
 
+		// Windrows — the third foam layer, and the one that was missing.
+		//
+		// Above a light breeze, Langmuir circulation gathers surfactant and bubbles
+		// into streaks running parallel to the wind, tens of metres apart. They are
+		// always there; a photograph of open water without them looks scrubbed.
+		// Ours had crest foam and nothing else, which is why the water *between*
+		// the breaking crests read as too clean — the sea only had foam where it
+		// was actively breaking, and real sea has foam everywhere it has recently
+		// broken and a faint wash besides.
+		//
+		// Anisotropic by construction: high frequency across the wind, very low
+		// along it, so the noise comes out as streaks rather than as blobs and no
+		// separate directional filter is needed.
+		const wPerp = vec2( u.windDir.y.negate(), u.windDir.x ).toVar( 'windPerp' );
+		const rowUV = vec2(
+			dot( P.xz, wPerp ).mul( 0.055 ),
+			dot( P.xz, u.windDir ).mul( 0.006 ).sub( u.time.mul( 0.012 ) )
+		).toVar( 'rowUV' );
+
+		// Onset well above a flat calm. Below about four metres a second there is
+		// no circulation to gather anything, which is what keeps Calm Lagoon clean.
+		const rowWind = smoothstep( 4.0, 13.0, u.windSpeed ).toVar( 'rowWind' );
+
+		// Faded out well before the streaks go sub-pixel. The same tail statistic
+		// that caught the bubble detail catches this: a 18 m streak is fine, but
+		// its second octave is 9 m and that is under a pixel by a kilometre out.
+		const rowNear = oneMinus( smoothstep( 300.0, 1100.0, vRadial ) ).toVar( 'rowNear' );
+
+		const rows = mx_fractal_noise_float( vec3( rowUV, u.time.mul( 0.02 ) ), 2, 2.0, 0.5 )
+			.mul( 0.5 ).add( 0.5 );
+
+		// Deposited low on the foam ramp on purpose: a windrow is a wash, not a
+		// whitecap, and pushing it past the mask's onset would carpet the sea.
+		foamRaw.assign( max( foamRaw,
+			smoothstep( 0.62, 0.92, rows ).mul( 0.34 ).mul( rowWind ).mul( rowNear ).mul( u.foamAmount )
+		) );
+
 		// Waterline. A moored hull still works the water against its planking, and
 		// the resulting collar of aerated foam is the one cue that reliably reads as
 		// "floating in" rather than "resting on". Torn up by the same noise as

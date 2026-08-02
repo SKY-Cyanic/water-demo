@@ -1,31 +1,31 @@
 {
 	"command": "flicker",
 	"origin": "http://localhost:8173",
-	"startedAt": "2026-08-01T03:33:16.539Z",
+	"startedAt": "2026-08-02T07:55:54.504Z",
 	"userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
 	"flicker": {
 		"open-sea/wide": {
 			"pixels": 1140480,
 			"resolution": "1920x1080",
-			"meanDelta": 14.655,
-			"p999Delta": 109,
-			"sparkFraction": 0.0356
+			"meanDelta": 14.194,
+			"p999Delta": 108,
+			"sparkFraction": 0.03218
 		},
 		"open-sea/wideHigh": {
 			"pixels": 1140480,
 			"resolution": "1920x1080",
-			"meanDelta": 6.047,
+			"meanDelta": 5.974,
 			"p999Delta": 71,
-			"sparkFraction": 0.00309
+			"sparkFraction": 0.00302
 		},
 		"storm-front/wide": {
 			"pixels": 1140480,
 			"resolution": "1920x1080",
-			"meanDelta": 19.777,
-			"p999Delta": 135,
-			"sparkFraction": 0.11009
+			"meanDelta": 19.682,
+			"p999Delta": 134,
+			"sparkFraction": 0.10866
 		}
 	},
-	"finishedAt": "2026-08-01T03:33:25.630Z",
+	"finishedAt": "2026-08-02T07:56:03.915Z",
 	"ok": true
 }
