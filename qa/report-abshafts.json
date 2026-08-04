@@ -1,7 +1,7 @@
 {
 	"command": "abshafts",
 	"origin": "http://localhost:8173",
-	"startedAt": "2026-08-04T07:14:15.044Z",
+	"startedAt": "2026-08-04T07:28:41.215Z",
 	"userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
 	"abshafts": {
 		"flag": "nossr",
@@ -10,22 +10,22 @@
 		"seconds": 12,
 		"rounds": 3,
 		"msOn": [
-			39.47,
-			40.76,
-			41.52
+			29.67,
+			32.7,
+			32.65
 		],
 		"msOff": [
-			27.85,
-			28.04,
-			29.67
+			28.08,
+			29.34,
+			30.42
 		],
 		"pairedDeltaMs": [
-			11.62,
-			12.72,
-			11.85
+			1.59,
+			3.36,
+			2.23
 		],
-		"costMs": 11.85
+		"costMs": 2.23
 	},
-	"finishedAt": "2026-08-04T07:15:53.964Z",
+	"finishedAt": "2026-08-04T07:30:19.819Z",
 	"ok": true
 }
