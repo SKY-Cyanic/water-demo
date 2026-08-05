@@ -35,11 +35,12 @@ export class Buoys {
 	 * @param {object|null} spectral  cascade textures, when the spectral engine is active
 	 * @param {number} count
 	 */
-	constructor( env, spectral, count = 9 ) {
+	constructor( env, spectral, count = 9, wake = null ) {
 
 		this.env = env;
 		this.count = count;
 		this.spectral = spectral;
+		this.wake = wake;
 
 		const rnd = mulberry32( 77123 );
 
@@ -104,6 +105,7 @@ export class Buoys {
 
 		const u = this.env.u;
 		const spectral = this.spectral;
+		const wake = this.wake;
 
 		const material = new MeshBasicNodeMaterial();
 		material.name = 'Buoy';
@@ -132,6 +134,27 @@ export class Buoys {
 					slope.addAssign( texture( spectral.slope[ c ], uvw, float( 0 ) ).xy );
 
 				}
+
+			}
+
+			// The wake, so a buoy rides the disturbance the boat leaves as well as
+			// the swell. This is the point of solving the wake rather than drawing
+			// it: the field is one surface, and anything that samples it responds
+			// to everything else on it without any of them knowing about each
+			// other. A drawn Kelvin figure could never do this.
+			//
+			// Slope from central differences, so the buoy also *leans* into the
+			// passing wave rather than only rising with it — which is most of what
+			// reads as a wake going by rather than the water inflating.
+			if ( wake ) {
+
+				const e = wake.world / wake.size;
+				disp.y.addAssign( wake.sample( anchor ) );
+
+				slope.addAssign( vec2(
+					wake.sample( anchor.add( vec2( e, 0 ) ) ).sub( wake.sample( anchor.sub( vec2( e, 0 ) ) ) ),
+					wake.sample( anchor.add( vec2( 0, e ) ) ).sub( wake.sample( anchor.sub( vec2( 0, e ) ) ) )
+				).div( e * 2 ) );
 
 			}
 

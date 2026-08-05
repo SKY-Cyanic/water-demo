@@ -355,7 +355,7 @@ class App {
 		// metre above the water is worse than no marker at all.
 		if ( this.spectral ) {
 
-			this.buoys = new Buoys( this.env, this.spectral.textures, 9 );
+			this.buoys = new Buoys( this.env, this.spectral.textures, 9, this.wake );
 			this.scene.add( this.buoys.mesh );
 
 			// The hero object. Everything the water does at its boundary — the foam
